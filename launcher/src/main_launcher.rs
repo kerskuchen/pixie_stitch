@@ -125,13 +125,13 @@ fn collect_symbols() -> Vec<Bitmap> {
     let symbols_dir_path = if let Some(exe_path) = std::env::current_exe().ok() {
         // We write into the exe filepath if possible
         let output_dir = system::path_without_filename(&exe_path.to_string_owned());
-        system::path_join(&output_dir, "symbols")
+        system::path_join(&output_dir, "resources")
     } else {
-        String::from("symbols")
+        String::from("resources")
     };
     assert!(
         system::path_exists(&symbols_dir_path),
-        "Missing `symbols` path in '{}'",
+        "Missing `resources` path in '{}'",
         symbols_dir_path
     );
 
