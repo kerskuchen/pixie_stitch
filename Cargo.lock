@@ -187,7 +187,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "ct_lib",
- "easy_process",
  "heck",
  "indexmap",
  "mustache",
@@ -198,9 +197,9 @@ dependencies = [
 
 [[package]]
 name = "easy_process"
-version = "0.1.7"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c48e7eee1f090cef007093721fce47159c40a574c44d72753bfc777543666db"
+checksum = "db39385265f3de33862f28207dbd290440547353ec0ea8175efc94867b949a4d"
 dependencies = [
  "checked_command",
  "cmdline_words_parser",

@@ -1,0 +1,14 @@
+[package]
+name = "launcher"
+version = "0.1.0"
+authors = ["Jakob Schwab <j.schwab@mail.de>"]
+edition = "2018"
+default-run = "launcher"
+
+[dependencies.ct_lib]
+path = "../cottontail/ct_lib"
+
+[dependencies.ct_platform]
+path = "../cottontail/ct_platform"
+
+[dependencies]
