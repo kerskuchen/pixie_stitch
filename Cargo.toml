@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "cottontail/ct_lib",
+    "cottontail/ct_makeproject",
+    "pixie_stitch",
+]
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+opt-level = 0
+debug = true

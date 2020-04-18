@@ -1,0 +1,66 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "run",
+            "command": "cargo",
+            "args": [
+                "run",
+                "-p",
+                "pixie_stitch",
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+        },
+        {
+            "type": "shell",
+            "label": "assets bake",
+            "command": "cargo",
+            "args": [
+                "run",
+                "-p",
+                "ct_assetbaker"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+        },
+        {
+            "type": "shell",
+            "label": "check",
+            "command": "cargo",
+            "args": [
+                "check",
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+        },
+        {
+            "type": "shell",
+            "label": "clippy",
+            "command": "cargo",
+            "args": [
+                "clippy",
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "build",
+            "command": "cargo",
+            "args": [
+                "build",
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ]
+        },
+    ]
+}
