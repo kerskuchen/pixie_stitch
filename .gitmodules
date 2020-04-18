@@ -1,0 +1,4 @@
+[submodule "cottontail"]
+	path = cottontail
+	url = https://github.com/kerskuchen/cottontail.git
+	branch = master
