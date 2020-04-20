@@ -1,6 +1,6 @@
 # Pixie Stitch
 
-A cross-stitch (and fusible-beads) pattern generator for Windows that is specialized for pixel art
+A [cross-stitch](https://en.wikipedia.org/wiki/Cross-stitch) (and fusible-beads) pattern generator for Windows that is specialized for pixel art
 and ease of use via drag-and-dropping of images. 
 
 # Usage
@@ -23,7 +23,33 @@ As of now Pixie Stitch supports `.png` and `.gif` images with up to 17 colors. T
 can be increased by adding additional black-and-white `16x16`-pixels-sized symbol images in the 
 `resources` folder where our executable is located.
 
+# Similar software
+
+Pixie stitch has a very narrow use-case and is specialized for small pixel art with
+few colors and optional transparency.
+
+For a more general use-case there are lots of other software for cross-stitch pattern generation 
+like:
+
+* https://www.pixel-stitch.net/
+* https://www.stitchfiddle.com/en
+* http://www.myphotostitch.com/Make_Pattern/Make_Pattern.html
+* https://www.pic2pat.com/index.en.php
+
+These have lot of extra feature like size- / color palette interpolation and yarn length 
+calculations. They also support way more image formats, output `.pdf` files and can run directly 
+in the browser.
+
 # Building it
+
+Assuming we have [Git](https://git-scm.com/) installed first we need to clone and initialize this 
+repository via:
+
+```
+git clone https://github.com/kerskuchen/pixie_stitch.git
+cd pixie_stitch
+git submodule update --init --remote
+```
 
 Assuming we have [Rust](https://www.rust-lang.org/) installed and can run `cargo` commands we can
 build a release version by just running `windows_build_shipping.bat`. This creates a new folder 
@@ -31,23 +57,24 @@ named `windows_shipping` which contains the final executable ready to run with a
 resources.
 
 If we have the [Resource Hacker](http://angusj.com/resourcehacker/) tool in our `%PATH` the 
-`windows_build_shipping.bat` will also set a launcher icon and version information for our 
+`windows_build_shipping.bat` script will also set a launcher icon and version information for our 
 executable.
 
-We can also build a debug version by running the usual `cargo build` command. The 
+# Development
+
+We can build a debug version by running the usual `cargo build` command. The 
 [Rust](https://www.rust-lang.org/) website has good information about how to start development 
 with Rust.
 
-# Similar software
+For development it is a good idea to check out the `cottontail` submodule on the master branch via
 
-There is lot of existing software for cross-stitch pattern generation like:
+```
+cd cottontail
+git checkout master
+```
 
-* https://www.pixel-stitch.net/
-* https://www.stitchfiddle.com/en
-* http://www.myphotostitch.com/Make_Pattern/Make_Pattern.html
-* https://www.pic2pat.com/index.en.php
+That will make sure that we don't accidentally commit something to `cottontail` in the 
+detached `HEAD` state.
 
-These have lot of extra feature that Pixie Stitch does not have like size and color palette 
-interpolation. Pixie stitch has a very narrow use-case and is specialized for small pixel art with
-few colors and optional transparency.
-
+To update `cottontail` to its latest version on master we can run the `git_update_cottontail.bat` 
+script.
