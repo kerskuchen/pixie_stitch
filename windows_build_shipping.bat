@@ -16,9 +16,6 @@ REM NOTE: robocopy has success error code 1
 robocopy "resources" "shipping_windows\resources" /s /e > nul
 if %errorlevel% neq 1 goto :error
 
-copy ".\target\release\launcher.exe" ".\shipping_windows\pixie_stitch.exe" > nul
-if %errorlevel% neq 0 goto :error
-
 REM Check if we have resource hacker in %path%
 where ResourceHacker.exe > nul 2> nul
 if %errorlevel% neq 0 goto :noicon
@@ -35,19 +32,20 @@ if %errorlevel% neq 0 goto :error
 
 goto :done
 
+REM ------------------------------------------------------------------------------------------------
 :noicon
-
 echo ResourceHacker.exe not detected in PATH - Skipping embedding launcher icon and version info
-
+copy ".\target\release\launcher.exe" ".\shipping_windows\pixie_stitch.exe" > nul
+if %errorlevel% neq 0 goto :error
 goto :done
 
+REM ------------------------------------------------------------------------------------------------
 :error
 echo Failed with error #%errorlevel%.
 pause
 exit /b %errorlevel%
 
+REM ------------------------------------------------------------------------------------------------
 :done
-
 rmdir /s /q "temp"
-
 echo FINISHED BUILDING WINDOWS SHIPPING
