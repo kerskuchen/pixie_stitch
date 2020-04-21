@@ -63,9 +63,25 @@ fn get_image_output_dir(image_filepath: &str, output_dir_suffix: &str) -> String
     }
 }
 
+// NOTE: This is for quicker testing to keep images open in imageviewer
+#[cfg(debug_assertions)]
 fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
     let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
-    std::fs::remove_dir_all(&output_dir).ok();
+    if !system::path_exists(&output_dir) {
+        std::fs::create_dir_all(&output_dir)
+            .expect(&format!("Cannot create directory '{}'", &output_dir));
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
+    let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
+    if system::path_exists(&output_dir) {
+        std::fs::remove_dir_all(&output_dir).expect(&format!(
+            "Cannot overwrite directory '{}': is a file from it still open?",
+            &output_dir
+        ));
+    }
     std::fs::create_dir_all(&output_dir)
         .expect(&format!("Cannot create directory '{}'", &output_dir));
 }
@@ -79,8 +95,8 @@ fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> S
 // NOTE: THIS IS FOR INTERNAL TESTING
 #[cfg(debug_assertions)]
 fn get_image_filepaths_from_commandline() -> Vec<String> {
-    vec!["nathan.png".to_owned()]
-    // vec!["nathan.png".to_owned(), "nathan_big.gif".to_owned()]
+    vec!["examples/nathan.png".to_owned()]
+    // vec!["examples/nathan.png".to_owned(), "examples/nathan_big.gif".to_owned()]
 }
 
 #[cfg(not(debug_assertions))]
@@ -639,6 +655,459 @@ fn create_cross_stitch_pattern_set(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Pattern creation centered
+
+fn place_grid_markers_in_pattern_centered(
+    bitmap: &Bitmap,
+    font: &BitmapFont,
+    grid_size: i32,
+    first_coordinate_x: i32,
+    first_coordinate_y: i32,
+) -> Bitmap {
+    // Determine how much image-padding we need by calculating the maximum marker text dimension
+    let marker_padding = {
+        let max_coordinates = [
+            first_coordinate_x,
+            first_coordinate_x + bitmap.width,
+            first_coordinate_y,
+            first_coordinate_y + bitmap.height,
+        ];
+        let max_text_charcount = max_coordinates
+            .iter()
+            .map(|max_coordinate| max_coordinate.to_string().len())
+            .max()
+            .unwrap();
+
+        let max_text_width = font.horizontal_advance_max * max_text_charcount as i32;
+        let max_text_height = font.vertical_advance;
+
+        i32::max(max_text_width, max_text_height)
+    };
+
+    let mut result_bitmap = bitmap.extended(
+        marker_padding,
+        marker_padding,
+        marker_padding,
+        marker_padding,
+        PixelRGBA::white(),
+    );
+
+    // Add x markers
+    for x in 0..(bitmap.width / grid_size) {
+        let coordinate_x = first_coordinate_x + x;
+
+        if coordinate_x % 10 == 0 {
+            let text = coordinate_x.to_string();
+            let draw_x = marker_padding + grid_size * x;
+            let draw_pos_top = Vec2i::new(draw_x, marker_padding / 2);
+            let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - marker_padding / 2);
+
+            result_bitmap.draw_text_aligned_in_point_exact(
+                font,
+                &text,
+                1,
+                draw_pos_top,
+                Vec2i::zero(),
+                false,
+                AlignmentHorizontal::Center,
+                AlignmentVertical::Center,
+            );
+            result_bitmap.draw_text_aligned_in_point_exact(
+                font,
+                &text,
+                1,
+                draw_pos_bottom,
+                Vec2i::zero(),
+                false,
+                AlignmentHorizontal::Center,
+                AlignmentVertical::Center,
+            );
+        }
+    }
+
+    // Add y markers
+    for y in 0..(bitmap.height / grid_size) {
+        let coordinate_y = first_coordinate_y + y;
+
+        if coordinate_y % 10 == 0 {
+            let text = (-coordinate_y).to_string();
+            let draw_y = marker_padding + grid_size * y;
+            let draw_pos_left = Vec2i::new(marker_padding / 2, draw_y);
+            let draw_pos_right = Vec2i::new(result_bitmap.width - marker_padding / 2, draw_y);
+
+            result_bitmap.draw_text_aligned_in_point_exact(
+                font,
+                &text,
+                1,
+                draw_pos_left,
+                Vec2i::zero(),
+                false,
+                AlignmentHorizontal::Center,
+                AlignmentVertical::Center,
+            );
+            result_bitmap.draw_text_aligned_in_point_exact(
+                font,
+                &text,
+                1,
+                draw_pos_right,
+                Vec2i::zero(),
+                false,
+                AlignmentHorizontal::Center,
+                AlignmentVertical::Center,
+            );
+        }
+    }
+
+    result_bitmap
+}
+
+fn create_cross_stitch_pattern_centered(
+    bitmap: &Bitmap,
+    font_grid_marker: &BitmapFont,
+    font_segment_index_indicator: &BitmapFont,
+    image_filepath: &str,
+    output_filename_suffix: &str,
+    output_dir_suffix: &str,
+    color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
+    segment_index: Option<usize>,
+    first_coordinate_x: i32,
+    first_coordinate_y: i32,
+    colorize: bool,
+    add_symbol: bool,
+    add_thick_ten_grid: bool,
+    add_origin_grid: bool,
+    symbol_mask_color: PixelRGBA,
+) {
+    // NOTE: To add closing lines of the thick and thin grid lines we need to leave some padding on
+    //       the right and bottom of the image
+    let padding_right = 1 + if bitmap.width % 10 == 0 && add_thick_ten_grid {
+        1
+    } else {
+        0
+    };
+    let padding_bottom = 1 + if bitmap.height % 10 == 0 && add_thick_ten_grid {
+        1
+    } else {
+        0
+    };
+    let mut scaled_bitmap = Bitmap::new(
+        padding_right + (TILE_SIZE * bitmap.width) as u32,
+        (padding_bottom + TILE_SIZE * bitmap.height) as u32,
+    );
+
+    for y in 0..bitmap.height {
+        for x in 0..bitmap.width {
+            let color = bitmap.get(x, y);
+
+            // Colorize pixels
+            if colorize {
+                scaled_bitmap.draw_rect_filled(
+                    TILE_SIZE * x,
+                    TILE_SIZE * y,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                    if color.a == 0 {
+                        PixelRGBA::white()
+                    } else {
+                        color
+                    },
+                );
+            } else {
+                scaled_bitmap.draw_rect_filled(
+                    TILE_SIZE * x,
+                    TILE_SIZE * y,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                    PixelRGBA::white(),
+                );
+            }
+
+            // Add symbol
+            if add_symbol && color.a != 0 {
+                let symbol = &color_mappings.get(&color).unwrap().symbol;
+                blit_symbol(
+                    symbol,
+                    &mut scaled_bitmap,
+                    Vec2i::new(TILE_SIZE * x, TILE_SIZE * y),
+                    symbol_mask_color,
+                );
+            }
+
+            // Add 1x1 grid
+            scaled_bitmap.draw_rect_filled(
+                TILE_SIZE * x,
+                TILE_SIZE * y,
+                1,
+                TILE_SIZE,
+                COLOR_GRID_THIN,
+            );
+            scaled_bitmap.draw_rect_filled(
+                TILE_SIZE * x,
+                TILE_SIZE * y,
+                TILE_SIZE,
+                1,
+                COLOR_GRID_THIN,
+            );
+
+            // Add 10x10 grid
+            if add_thick_ten_grid {
+                let coordinate_x = first_coordinate_x + x;
+                let coordinate_y = first_coordinate_y + y;
+                if coordinate_x % 10 == 0 {
+                    scaled_bitmap.draw_rect_filled(
+                        TILE_SIZE * x,
+                        TILE_SIZE * y,
+                        2,
+                        TILE_SIZE,
+                        COLOR_GRID_THICK,
+                    );
+                }
+                if coordinate_y % 10 == 0 {
+                    scaled_bitmap.draw_rect_filled(
+                        TILE_SIZE * x,
+                        TILE_SIZE * y,
+                        TILE_SIZE,
+                        2,
+                        COLOR_GRID_THICK,
+                    );
+                }
+            }
+
+            // Add origin grid
+            if add_origin_grid {
+                let coordinate_x = first_coordinate_x + x;
+                let coordinate_y = first_coordinate_y + y;
+                if coordinate_x == 0 {
+                    scaled_bitmap.draw_rect_filled_safely(
+                        TILE_SIZE * x - 2,
+                        TILE_SIZE * y,
+                        4,
+                        TILE_SIZE,
+                        PixelRGBA::black(),
+                    );
+                    for offset_y in (0..TILE_SIZE).step_by(8) {
+                        scaled_bitmap.draw_rect_filled_safely(
+                            TILE_SIZE * x - 1,
+                            TILE_SIZE * y + offset_y,
+                            2,
+                            4,
+                            PixelRGBA::black(),
+                        );
+                        scaled_bitmap.draw_rect_filled_safely(
+                            TILE_SIZE * x - 1,
+                            TILE_SIZE * y + offset_y + 2,
+                            2,
+                            4,
+                            PixelRGBA::white(),
+                        );
+                    }
+                }
+                if coordinate_y == 0 {
+                    scaled_bitmap.draw_rect_filled_safely(
+                        TILE_SIZE * x,
+                        TILE_SIZE * y - 2,
+                        TILE_SIZE,
+                        4,
+                        PixelRGBA::black(),
+                    );
+                    for offset_y in (0..TILE_SIZE).step_by(8) {
+                        scaled_bitmap.draw_rect_filled_safely(
+                            TILE_SIZE * x + offset_y,
+                            TILE_SIZE * y - 1,
+                            4,
+                            2,
+                            PixelRGBA::black(),
+                        );
+                        scaled_bitmap.draw_rect_filled_safely(
+                            TILE_SIZE * x + offset_y + 2,
+                            TILE_SIZE * y - 1,
+                            4,
+                            2,
+                            PixelRGBA::white(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Close 1x1 line on right bitmap border
+    scaled_bitmap.draw_rect_filled(
+        TILE_SIZE * bitmap.width,
+        0,
+        1,
+        TILE_SIZE * bitmap.height,
+        COLOR_GRID_THIN,
+    );
+    // Close 1x1 line on bottom bitmap border
+    scaled_bitmap.draw_rect_filled(
+        0,
+        TILE_SIZE * bitmap.height,
+        TILE_SIZE * bitmap.width,
+        1,
+        COLOR_GRID_THIN,
+    );
+
+    if add_thick_ten_grid {
+        // Close 10x10 line on right bitmap border
+        let coordinate_x = first_coordinate_x + bitmap.width;
+        if coordinate_x % 10 == 0 {
+            scaled_bitmap.draw_rect_filled(
+                TILE_SIZE * bitmap.width,
+                0,
+                2,
+                TILE_SIZE * bitmap.height,
+                COLOR_GRID_THICK,
+            );
+        }
+        // Close 10x10 line on bottom bitmap border
+        let coordinate_y = first_coordinate_y + bitmap.height;
+        if coordinate_y % 10 == 0 {
+            scaled_bitmap.draw_rect_filled(
+                0,
+                TILE_SIZE * bitmap.height,
+                TILE_SIZE * bitmap.width,
+                2,
+                COLOR_GRID_THICK,
+            );
+        }
+    }
+
+    // Add 10-grid markers
+    let final_bitmap = if add_thick_ten_grid {
+        place_grid_markers_in_pattern_centered(
+            &scaled_bitmap,
+            font_grid_marker,
+            TILE_SIZE,
+            first_coordinate_x,
+            first_coordinate_y,
+        )
+    } else {
+        scaled_bitmap
+    };
+
+    // Add segment index indicator if necessary
+    let final_bitmap = if let Some(segment_index) = segment_index {
+        let text_bitmap = Bitmap::create_from_text(
+            font_segment_index_indicator,
+            &format!("\n Pattern Part {} \n", segment_index),
+            1,
+            PixelRGBA::white(),
+        );
+        text_bitmap.glued_to(
+            &final_bitmap,
+            GluePosition::TopCenter,
+            0,
+            PixelRGBA::white(),
+        )
+    } else {
+        final_bitmap
+    };
+
+    // Write out png image
+    let output_filepath = get_image_output_filepath(&image_filepath, output_dir_suffix)
+        + "_"
+        + output_filename_suffix
+        + ".png";
+    Bitmap::write_to_png_file(&final_bitmap, &output_filepath);
+}
+
+fn create_cross_stitch_pattern_set_centered(
+    image: &Bitmap,
+    font_grid_marker: &BitmapFont,
+    font_segment_index_indicator: &BitmapFont,
+    image_filepath: &str,
+    output_filename_suffix: &str,
+    output_dir_suffix: &str,
+    color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
+    color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
+    segment_index: Option<usize>,
+    first_coordinate_x: i32,
+    first_coordinate_y: i32,
+    create_paint_by_number_set: bool,
+) {
+    rayon::scope(|scope| {
+        scope.spawn(|_| {
+            create_cross_stitch_pattern_centered(
+                &image,
+                font_grid_marker,
+                font_segment_index_indicator,
+                &image_filepath,
+                &("cross_stitch_colorized_".to_owned() + output_filename_suffix),
+                output_dir_suffix,
+                &color_mappings,
+                segment_index,
+                first_coordinate_x,
+                first_coordinate_y,
+                true,
+                true,
+                true,
+                true,
+                PixelRGBA::white(),
+            );
+        });
+        /*
+        scope.spawn(|_| {
+            create_cross_stitch_pattern_centered(
+                &image,
+                font_grid_marker,
+                font_segment_index_indicator,
+                &image_filepath,
+                &("cross_stitch_".to_owned() + output_filename_suffix),
+                output_dir_suffix,
+                &color_mappings,
+                segment_index,
+                first_coordinate_x,
+                first_coordinate_y,
+                false,
+                true,
+                true,
+                PixelRGBA::white(),
+            );
+        });
+        scope.spawn(|_| {
+            create_cross_stitch_pattern_centered(
+                &image,
+                font_grid_marker,
+                font_segment_index_indicator,
+                &image_filepath,
+                &("cross_stitch_colorized_no_symbols_".to_owned() + output_filename_suffix),
+                output_dir_suffix,
+                &color_mappings,
+                segment_index,
+                first_coordinate_x,
+                first_coordinate_y,
+                true,
+                false,
+                true,
+                PixelRGBA::white(),
+            );
+        });
+        if create_paint_by_number_set {
+            scope.spawn(|_| {
+                create_cross_stitch_pattern_centered(
+                    &image,
+                    font_grid_marker,
+                    font_segment_index_indicator,
+                    &image_filepath,
+                    &("paint_by_numbers_".to_owned() + output_filename_suffix),
+                    output_dir_suffix,
+                    &color_mappings_alphanum,
+                    segment_index,
+                first_coordinate_x,
+                first_coordinate_y,
+                    false,
+                    true,
+                    false,
+                    PixelRGBA::transparent(),
+                );
+            });
+        }
+        */
+    });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // Image analysis
 
 fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorInfo> {
@@ -685,11 +1154,8 @@ fn create_patterns_dir(
     font_big: &BitmapFont,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
-    centered: bool,
 ) {
-    let output_dir_suffix = if centered { "centered" } else { "" };
-    let image_center_x = math::make_even(image.width) / 2;
-    let image_center_y = math::make_even(image.height) / 2;
+    let output_dir_suffix = "";
 
     let (segment_images, segment_coordinates) =
         image.to_segments(SPLIT_SEGMENT_WIDTH, SPLIT_SEGMENT_HEIGHT);
@@ -708,20 +1174,22 @@ fn create_patterns_dir(
         });
 
         // Create patterns for complete set
-        create_cross_stitch_pattern_set(
-            &image,
-            &font,
-            &font_big,
-            &image_filepath,
-            "complete",
-            output_dir_suffix,
-            &color_mappings,
-            &color_mappings_alphanum,
-            None,
-            0,
-            0,
-            true,
-        );
+        scope.spawn(|_| {
+            create_cross_stitch_pattern_set(
+                &image,
+                &font,
+                &font_big,
+                &image_filepath,
+                "complete",
+                output_dir_suffix,
+                &color_mappings,
+                &color_mappings_alphanum,
+                None,
+                0,
+                0,
+                true,
+            );
+        });
 
         // Create patterns for individual segments if needed
         if segment_images.len() > 1 {
@@ -749,6 +1217,87 @@ fn create_patterns_dir(
                     );
                 });
         }
+    });
+}
+
+fn create_patterns_dir_centered(
+    image: &Bitmap,
+    image_filepath: &str,
+    font: &BitmapFont,
+    font_big: &BitmapFont,
+    color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
+    color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
+) {
+    let output_dir_suffix = "centered";
+    let image_center_x = math::make_even_upwards(image.width) / 2;
+    let image_center_y = math::make_even_upwards(image.height) / 2;
+
+    /*
+    let (segment_images, segment_coordinates) =
+        image.to_segments(SPLIT_SEGMENT_WIDTH, SPLIT_SEGMENT_HEIGHT);
+    */
+
+    rayon::scope(|scope| {
+        /*
+            // Legend
+            scope.spawn(|_| {
+                create_cross_stitch_legend(
+                    image.dim(),
+                    &color_mappings,
+                    &image_filepath,
+                    output_dir_suffix,
+                    &font,
+                    &segment_coordinates,
+                );
+            });
+        */
+
+        // Create patterns for complete set
+        scope.spawn(|_| {
+            create_cross_stitch_pattern_set_centered(
+                &image,
+                &font,
+                &font_big,
+                &image_filepath,
+                "complete",
+                output_dir_suffix,
+                &color_mappings,
+                &color_mappings_alphanum,
+                None,
+                -image_center_x,
+                -image_center_y,
+                true,
+            );
+        });
+
+        /*
+        // Create patterns for individual segments if needed
+        if segment_images.len() > 1 {
+            segment_images
+                .par_iter()
+                .zip(segment_coordinates.par_iter())
+                .enumerate()
+                .for_each(|(segment_index, (segment_image, segment_coordinate))| {
+                    let marker_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
+                    let marker_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
+
+                    create_cross_stitch_pattern_set(
+                        segment_image,
+                        &font,
+                        &font_big,
+                        &image_filepath,
+                        &format!("segment_{}", segment_index + 1),
+                        output_dir_suffix,
+                        &color_mappings,
+                        &color_mappings_alphanum,
+                        Some(segment_index + 1),
+                        marker_start_x,
+                        marker_start_y,
+                        false,
+                    );
+                });
+        }
+        */
     });
 }
 
@@ -1051,18 +1600,16 @@ fn main() {
                     &font_big,
                     &color_mappings,
                     &color_mappings_alphanum,
-                    true,
                 );
             });
             scope.spawn(|_| {
-                create_patterns_dir(
+                create_patterns_dir_centered(
                     &image,
                     &image_filepath,
                     &font,
                     &font_big,
                     &color_mappings,
                     &color_mappings_alphanum,
-                    false,
                 );
             });
         });
