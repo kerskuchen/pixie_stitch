@@ -677,24 +677,24 @@ fn place_grid_labels_in_pattern_centered(
     scaled_bitmap: &Bitmap,
     grid_cell_size: i32,
     font: &BitmapFont,
-    global_first_coordinate_x: i32,
-    global_first_coordinate_y: i32,
+    logical_first_coordinate_x: i32,
+    logical_first_coordinate_y: i32,
 ) -> Bitmap {
     let grid_width = scaled_bitmap.width / grid_cell_size;
     let grid_height = scaled_bitmap.height / grid_cell_size;
 
-    let global_last_coordinate_x = global_first_coordinate_x + grid_width;
-    let global_last_coordinate_y = global_first_coordinate_y + grid_height;
+    let logical_last_coordinate_x = logical_first_coordinate_x + grid_width;
+    let logical_last_coordinate_y = logical_first_coordinate_y + grid_height;
 
     // Determine how much image-padding we need by calculating the maximum label text dimension
     let label_padding = {
-        let max_coordinates = [
-            global_first_coordinate_x,
-            global_first_coordinate_y,
-            global_last_coordinate_x,
-            global_last_coordinate_y,
+        let max_logical_coordinates = [
+            logical_first_coordinate_x,
+            logical_first_coordinate_y,
+            logical_last_coordinate_x,
+            logical_last_coordinate_y,
         ];
-        let max_text_charcount = max_coordinates
+        let max_text_charcount = max_logical_coordinates
             .iter()
             .map(|max_coordinate| max_coordinate.to_string().len())
             .max()
@@ -714,37 +714,37 @@ fn place_grid_labels_in_pattern_centered(
     // Determine all x label positions
     let label_coords_x = {
         let mut result = Vec::new();
-        for local_coord_x in 0..(grid_width + 1) {
-            let global_coord_x = global_first_coordinate_x + local_coord_x;
-            if global_coord_x % 10 == 0 {
-                result.push((local_coord_x, global_coord_x));
+        for bitmap_coord_x in 0..(grid_width + 1) {
+            let logical_coord_x = logical_first_coordinate_x + bitmap_coord_x;
+            if logical_coord_x % 10 == 0 {
+                result.push((bitmap_coord_x, logical_coord_x));
             }
         }
 
         // Add label for first and last horizontal grid pixel so that we don't mix up a remaining
         // 7, 8 or 9 pixel block with a 10 block
         let pixel_count_in_first_block_horizontal = i32::abs(
-            ceil_to_multiple_of_target_i32(global_first_coordinate_x, 10)
-                - global_first_coordinate_x,
+            ceil_to_multiple_of_target_i32(logical_first_coordinate_x, 10)
+                - logical_first_coordinate_x,
         );
         if pixel_count_in_first_block_horizontal > 3 {
-            result.push((0, global_first_coordinate_x));
+            result.push((0, logical_first_coordinate_x));
         }
         let pixel_count_in_last_block_horizontal = i32::abs(
-            floor_to_multiple_of_target_i32(global_last_coordinate_x, 10)
-                - global_last_coordinate_x,
+            floor_to_multiple_of_target_i32(logical_last_coordinate_x, 10)
+                - logical_last_coordinate_x,
         );
         if pixel_count_in_last_block_horizontal > 3 {
-            result.push((grid_width, global_last_coordinate_x));
+            result.push((grid_width, logical_last_coordinate_x));
         }
 
         result
     };
 
     // Draw x labels
-    for (local_coord_x, global_coord_x) in label_coords_x {
-        let text = global_coord_x.to_string();
-        let draw_x = label_padding + grid_cell_size * local_coord_x;
+    for (bitmap_coord_x, logical_coord_x) in label_coords_x {
+        let text = logical_coord_x.to_string();
+        let draw_x = label_padding + grid_cell_size * bitmap_coord_x;
         let draw_pos_top = Vec2i::new(draw_x, label_padding / 2);
         let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - label_padding / 2);
 
@@ -773,38 +773,38 @@ fn place_grid_labels_in_pattern_centered(
     // Determine all y label positions
     let label_coords_y = {
         let mut result = Vec::new();
-        for local_coord_y in 0..(grid_height + 1) {
-            let global_coord_y = global_first_coordinate_y + local_coord_y;
-            if global_coord_y % 10 == 0 {
-                result.push((local_coord_y, global_coord_y));
+        for bitmap_coord_y in 0..(grid_height + 1) {
+            let logical_coord_y = logical_first_coordinate_y + bitmap_coord_y;
+            if logical_coord_y % 10 == 0 {
+                result.push((bitmap_coord_y, logical_coord_y));
             }
         }
 
         // Add label for first and last vertical grid pixel so that we don't mix up a remaining
         // 7, 8 or 9 pixel block with a 10 block
         let pixel_count_in_first_block_vertical = i32::abs(
-            ceil_to_multiple_of_target_i32(global_first_coordinate_y, 10)
-                - global_first_coordinate_y,
+            ceil_to_multiple_of_target_i32(logical_first_coordinate_y, 10)
+                - logical_first_coordinate_y,
         );
         if pixel_count_in_first_block_vertical > 3 {
-            result.push((0, global_first_coordinate_y));
+            result.push((0, logical_first_coordinate_y));
         }
         let pixel_count_in_last_block_vertical = i32::abs(
-            floor_to_multiple_of_target_i32(global_last_coordinate_y, 10)
-                - global_last_coordinate_y,
+            floor_to_multiple_of_target_i32(logical_last_coordinate_y, 10)
+                - logical_last_coordinate_y,
         );
         if pixel_count_in_last_block_vertical > 3 {
-            result.push((grid_height, global_last_coordinate_y));
+            result.push((grid_height, logical_last_coordinate_y));
         }
 
         result
     };
 
     // Draw y labels
-    for (local_coord_y, global_coord_y) in label_coords_y {
+    for (bitmap_coord_y, logical_coord_y) in label_coords_y {
         // NOTE: In pixel space our y-coordinates are y-down. We want cartesian y-up so we negate y
-        let text = (-global_coord_y).to_string();
-        let draw_y = label_padding + grid_cell_size * local_coord_y;
+        let text = (-logical_coord_y).to_string();
+        let draw_y = label_padding + grid_cell_size * bitmap_coord_y;
         let draw_pos_left = Vec2i::new(label_padding / 2, draw_y);
         let draw_pos_right = Vec2i::new(result_bitmap.width - label_padding / 2, draw_y);
 
@@ -842,8 +842,8 @@ fn create_cross_stitch_pattern_centered(
     output_dir_suffix: &str,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
-    first_coordinate_x: i32,
-    first_coordinate_y: i32,
+    logical_first_coordinate_x: i32,
+    logical_first_coordinate_y: i32,
     colorize: bool,
     add_symbol: bool,
     add_thick_ten_grid: bool,
@@ -922,11 +922,11 @@ fn create_cross_stitch_pattern_centered(
 
     // Add 10x10 grid
     if add_thick_ten_grid {
-        for x in 0..bitmap.width {
-            let coordinate_x = first_coordinate_x + x;
-            if coordinate_x % 10 == 0 {
+        for bitmap_x in 0..bitmap.width {
+            let logical_x = logical_first_coordinate_x + bitmap_x;
+            if logical_x % 10 == 0 {
                 scaled_bitmap.draw_rect_filled(
-                    TILE_SIZE * x,
+                    TILE_SIZE * bitmap_x,
                     0,
                     2,
                     scaled_bitmap_height,
@@ -934,12 +934,12 @@ fn create_cross_stitch_pattern_centered(
                 );
             }
         }
-        for y in 0..bitmap.height {
-            let coordinate_y = first_coordinate_y + y;
-            if coordinate_y % 10 == 0 {
+        for bitmap_y in 0..bitmap.height {
+            let logical_y = logical_first_coordinate_y + bitmap_y;
+            if logical_y % 10 == 0 {
                 scaled_bitmap.draw_rect_filled(
                     0,
-                    TILE_SIZE * y,
+                    TILE_SIZE * bitmap_y,
                     scaled_bitmap_width,
                     2,
                     COLOR_GRID_THICK,
@@ -947,7 +947,7 @@ fn create_cross_stitch_pattern_centered(
             }
         }
         // Close 10x10 grid line on bottom-right bitmap border if necessary
-        if (first_coordinate_x + bitmap.width) % 10 == 0 {
+        if (logical_first_coordinate_x + bitmap.width) % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
                 scaled_bitmap_width - 2,
                 0,
@@ -956,7 +956,7 @@ fn create_cross_stitch_pattern_centered(
                 COLOR_GRID_THICK,
             );
         }
-        if (first_coordinate_y + bitmap.height) % 10 == 0 {
+        if (logical_first_coordinate_y + bitmap.height) % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
                 0,
                 scaled_bitmap_height - 2,
@@ -969,22 +969,22 @@ fn create_cross_stitch_pattern_centered(
 
     // Add origin grid
     if add_origin_grid {
-        let origin_bitmap_coord_x = -first_coordinate_x;
+        let origin_bitmap_coord_x = -logical_first_coordinate_x;
         if 0 < origin_bitmap_coord_x && origin_bitmap_coord_x < bitmap.width {
             draw_origin_line_vertical(&mut scaled_bitmap, TILE_SIZE * origin_bitmap_coord_x);
         }
 
-        let origin_bitmap_coord_y = -first_coordinate_y;
+        let origin_bitmap_coord_y = -logical_first_coordinate_y;
         if 0 < origin_bitmap_coord_y && origin_bitmap_coord_y < bitmap.height {
             draw_origin_line_horizontal(&mut scaled_bitmap, TILE_SIZE * origin_bitmap_coord_y);
         }
 
         // NOTE: If our origin grid is located on the edge of our image we want to extend our image
         //       so that the origin grid is drawn more clearly visible
-        let needs_grid_left = first_coordinate_x == 0;
-        let needs_grid_top = first_coordinate_y == 0;
-        let needs_grid_right = first_coordinate_x + bitmap.width == 0;
-        let needs_grid_bottom = first_coordinate_y + bitmap.height == 0;
+        let needs_grid_left = logical_first_coordinate_x == 0;
+        let needs_grid_top = logical_first_coordinate_y == 0;
+        let needs_grid_right = logical_first_coordinate_x + bitmap.width == 0;
+        let needs_grid_bottom = logical_first_coordinate_y + bitmap.height == 0;
 
         let padding_left = if needs_grid_left { 2 } else { 0 };
         let padding_top = if needs_grid_top { 2 } else { 0 };
@@ -1024,8 +1024,8 @@ fn create_cross_stitch_pattern_centered(
             &scaled_bitmap,
             TILE_SIZE,
             font_grid_label,
-            first_coordinate_x,
-            first_coordinate_y,
+            logical_first_coordinate_x,
+            logical_first_coordinate_y,
         )
     } else {
         scaled_bitmap
@@ -1067,8 +1067,8 @@ fn create_cross_stitch_pattern_set_centered(
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
-    first_coordinate_x: i32,
-    first_coordinate_y: i32,
+    logical_first_coordinate_x: i32,
+    logical_first_coordinate_y: i32,
     create_paint_by_number_set: bool,
 ) {
     rayon::scope(|scope| {
@@ -1082,8 +1082,8 @@ fn create_cross_stitch_pattern_set_centered(
                 output_dir_suffix,
                 &color_mappings,
                 segment_index,
-                first_coordinate_x,
-                first_coordinate_y,
+                logical_first_coordinate_x,
+                logical_first_coordinate_y,
                 true,
                 true,
                 true,
@@ -1101,8 +1101,8 @@ fn create_cross_stitch_pattern_set_centered(
                 output_dir_suffix,
                 &color_mappings,
                 segment_index,
-                first_coordinate_x,
-                first_coordinate_y,
+                logical_first_coordinate_x,
+                logical_first_coordinate_y,
                 false,
                 true,
                 true,
@@ -1120,8 +1120,8 @@ fn create_cross_stitch_pattern_set_centered(
                 output_dir_suffix,
                 &color_mappings,
                 segment_index,
-                first_coordinate_x,
-                first_coordinate_y,
+                logical_first_coordinate_x,
+                logical_first_coordinate_y,
                 true,
                 false,
                 true,
@@ -1140,8 +1140,8 @@ fn create_cross_stitch_pattern_set_centered(
                     output_dir_suffix,
                     &color_mappings_alphanum,
                     segment_index,
-                    first_coordinate_x,
-                    first_coordinate_y,
+                    logical_first_coordinate_x,
+                    logical_first_coordinate_y,
                     false,
                     true,
                     false,
@@ -1319,8 +1319,9 @@ fn create_patterns_dir_centered(
                 .zip(segment_coordinates.par_iter())
                 .enumerate()
                 .for_each(|(segment_index, (segment_image, segment_coordinate))| {
-                    let label_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x - image_center_x;
-                    let label_start_y =
+                    let logical_first_coordinate_x =
+                        SPLIT_SEGMENT_WIDTH * segment_coordinate.x - image_center_x;
+                    let logical_first_coordinate_y =
                         SPLIT_SEGMENT_HEIGHT * segment_coordinate.y - image_center_y;
 
                     create_cross_stitch_pattern_set_centered(
@@ -1333,8 +1334,8 @@ fn create_patterns_dir_centered(
                         &color_mappings,
                         &color_mappings_alphanum,
                         Some(segment_index + 1),
-                        label_start_x,
-                        label_start_y,
+                        logical_first_coordinate_x,
+                        logical_first_coordinate_y,
                         false,
                     );
                 });
