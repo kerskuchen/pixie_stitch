@@ -778,21 +778,9 @@ fn create_cross_stitch_pattern_centered(
     add_origin_grid: bool,
     symbol_mask_color: PixelRGBA,
 ) {
-    // NOTE: To add closing lines of the thick and thin grid lines we need to leave some padding on
-    //       the right and bottom of the image
-    let padding_right = 1 + if bitmap.width % 10 == 0 && add_thick_ten_grid {
-        1
-    } else {
-        0
-    };
-    let padding_bottom = 1 + if bitmap.height % 10 == 0 && add_thick_ten_grid {
-        1
-    } else {
-        0
-    };
     let mut scaled_bitmap = Bitmap::new(
-        padding_right + (TILE_SIZE * bitmap.width) as u32,
-        (padding_bottom + TILE_SIZE * bitmap.height) as u32,
+        (TILE_SIZE * bitmap.width) as u32,
+        (TILE_SIZE * bitmap.height) as u32,
     );
 
     for y in 0..bitmap.height {
@@ -933,7 +921,7 @@ fn create_cross_stitch_pattern_centered(
 
     // Close 1x1 line on right bitmap border
     scaled_bitmap.draw_rect_filled(
-        TILE_SIZE * bitmap.width,
+        TILE_SIZE * bitmap.width - 1,
         0,
         1,
         TILE_SIZE * bitmap.height,
@@ -942,7 +930,7 @@ fn create_cross_stitch_pattern_centered(
     // Close 1x1 line on bottom bitmap border
     scaled_bitmap.draw_rect_filled(
         0,
-        TILE_SIZE * bitmap.height,
+        TILE_SIZE * bitmap.height - 1,
         TILE_SIZE * bitmap.width,
         1,
         COLOR_GRID_THIN,
@@ -953,7 +941,7 @@ fn create_cross_stitch_pattern_centered(
         let coordinate_x = first_coordinate_x + bitmap.width;
         if coordinate_x % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
-                TILE_SIZE * bitmap.width,
+                TILE_SIZE * bitmap.width - 2,
                 0,
                 2,
                 TILE_SIZE * bitmap.height,
@@ -965,7 +953,7 @@ fn create_cross_stitch_pattern_centered(
         if coordinate_y % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
                 0,
-                TILE_SIZE * bitmap.height,
+                TILE_SIZE * bitmap.height - 2,
                 TILE_SIZE * bitmap.width,
                 2,
                 COLOR_GRID_THICK,
