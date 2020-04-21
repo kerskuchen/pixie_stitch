@@ -639,7 +639,7 @@ fn create_cross_stitch_pattern_set(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// Pattern creation
+// Image analysis
 
 fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorInfo> {
     let mut color_mappings = IndexMap::new();
@@ -673,6 +673,83 @@ fn image_map_colors_to_symbols(
     for (entry, symbol) in color_mappings.values_mut().zip(symbols.iter()) {
         entry.symbol = symbol.clone();
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Pattern dir creation
+
+fn create_patterns_dir(
+    image: &Bitmap,
+    image_filepath: &str,
+    font: &BitmapFont,
+    font_big: &BitmapFont,
+    color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
+    color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
+    centered: bool,
+) {
+    let output_dir_suffix = if centered { "centered" } else { "" };
+    let image_center_x = math::make_even(image.width) / 2;
+    let image_center_y = math::make_even(image.height) / 2;
+
+    let (segment_images, segment_coordinates) =
+        image.to_segments(SPLIT_SEGMENT_WIDTH, SPLIT_SEGMENT_HEIGHT);
+
+    rayon::scope(|scope| {
+        // Legend
+        scope.spawn(|_| {
+            create_cross_stitch_legend(
+                image.dim(),
+                &color_mappings,
+                &image_filepath,
+                output_dir_suffix,
+                &font,
+                &segment_coordinates,
+            );
+        });
+
+        // Create patterns for complete set
+        create_cross_stitch_pattern_set(
+            &image,
+            &font,
+            &font_big,
+            &image_filepath,
+            "complete",
+            output_dir_suffix,
+            &color_mappings,
+            &color_mappings_alphanum,
+            None,
+            0,
+            0,
+            true,
+        );
+
+        // Create patterns for individual segments if needed
+        if segment_images.len() > 1 {
+            segment_images
+                .par_iter()
+                .zip(segment_coordinates.par_iter())
+                .enumerate()
+                .for_each(|(segment_index, (segment_image, segment_coordinate))| {
+                    let marker_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
+                    let marker_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
+
+                    create_cross_stitch_pattern_set(
+                        segment_image,
+                        &font,
+                        &font_big,
+                        &image_filepath,
+                        &format!("segment_{}", segment_index + 1),
+                        output_dir_suffix,
+                        &color_mappings,
+                        &color_mappings_alphanum,
+                        Some(segment_index + 1),
+                        marker_start_x,
+                        marker_start_y,
+                        false,
+                    );
+                });
+        }
+    });
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -965,102 +1042,29 @@ fn main() {
         image_map_colors_to_symbols(&mut color_mappings, &symbols);
         image_map_colors_to_symbols(&mut color_mappings_alphanum, &symbols_alphanum);
 
-        let (segment_images, segment_coordinates) =
-            image.to_segments(SPLIT_SEGMENT_WIDTH, SPLIT_SEGMENT_HEIGHT);
-
         rayon::scope(|scope| {
-            // Legend
             scope.spawn(|_| {
-                create_cross_stitch_legend(
-                    image.dim(),
-                    &color_mappings,
+                create_patterns_dir(
+                    &image,
                     &image_filepath,
-                    "",
                     &font,
-                    &segment_coordinates,
+                    &font_big,
+                    &color_mappings,
+                    &color_mappings_alphanum,
+                    true,
                 );
             });
             scope.spawn(|_| {
-                create_cross_stitch_legend(
-                    image.dim(),
-                    &color_mappings,
+                create_patterns_dir(
+                    &image,
                     &image_filepath,
-                    "centered",
                     &font,
-                    &segment_coordinates,
+                    &font_big,
+                    &color_mappings,
+                    &color_mappings_alphanum,
+                    false,
                 );
             });
-
-            // Create patterns for complete set
-            create_cross_stitch_pattern_set(
-                &image,
-                &font,
-                &font_big,
-                &image_filepath,
-                "complete",
-                "",
-                &color_mappings,
-                &color_mappings_alphanum,
-                None,
-                0,
-                0,
-                true,
-            );
-            create_cross_stitch_pattern_set(
-                &image,
-                &font,
-                &font_big,
-                &image_filepath,
-                "complete",
-                "centered",
-                &color_mappings,
-                &color_mappings_alphanum,
-                None,
-                0,
-                0,
-                true,
-            );
-
-            // Create patterns for individual segments if needed
-            if segment_images.len() > 1 {
-                segment_images
-                    .par_iter()
-                    .zip(segment_coordinates.par_iter())
-                    .enumerate()
-                    .for_each(|(segment_index, (segment_image, segment_coordinate))| {
-                        let marker_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
-                        let marker_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
-
-                        create_cross_stitch_pattern_set(
-                            segment_image,
-                            &font,
-                            &font_big,
-                            &image_filepath,
-                            &format!("segment_{}", segment_index + 1),
-                            "",
-                            &color_mappings,
-                            &color_mappings_alphanum,
-                            Some(segment_index + 1),
-                            marker_start_x,
-                            marker_start_y,
-                            false,
-                        );
-                        create_cross_stitch_pattern_set(
-                            segment_image,
-                            &font,
-                            &font_big,
-                            &image_filepath,
-                            &format!("segment_{}", segment_index + 1),
-                            "centered",
-                            &color_mappings,
-                            &color_mappings_alphanum,
-                            Some(segment_index + 1),
-                            marker_start_x,
-                            marker_start_y,
-                            false,
-                        );
-                    });
-            }
         });
     }
 
