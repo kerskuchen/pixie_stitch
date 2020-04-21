@@ -659,16 +659,12 @@ fn create_cross_stitch_pattern_set(
 
 fn draw_origin_line_vertical(bitmap: &mut Bitmap, pos_x: i32) {
     bitmap.draw_rect_filled_safely(pos_x - 2, 0, 4, bitmap.height, PixelRGBA::black());
-    for offset_y in (0..bitmap.height).step_by(8) {
-        bitmap.draw_rect_filled_safely(pos_x - 1, offset_y + 2, 2, 4, PixelRGBA::white());
-    }
+    bitmap.draw_rect_filled_safely(pos_x - 1, 0, 2, bitmap.height, PixelRGBA::white());
 }
 
 fn draw_origin_line_horizontal(bitmap: &mut Bitmap, pos_y: i32) {
     bitmap.draw_rect_filled_safely(0, pos_y - 2, bitmap.width, 4, PixelRGBA::black());
-    for offset_x in (0..bitmap.width).step_by(8) {
-        bitmap.draw_rect_filled_safely(offset_x + 2, pos_y - 1, 4, 2, PixelRGBA::white());
-    }
+    bitmap.draw_rect_filled_safely(0, pos_y - 1, bitmap.width, 2, PixelRGBA::white());
 }
 
 /// NOTE: This assumes that the scaled bitmap width and height are a roughly a multiple of
@@ -1218,8 +1214,8 @@ fn create_patterns_dir_centered(
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let output_dir_suffix = "centered";
-    let image_center_x = math::make_even_upwards(image.width);
-    let image_center_y = math::make_even_upwards(image.height);
+    let image_center_x = math::make_even_upwards(image.width) / 2;
+    let image_center_y = math::make_even_upwards(image.height) / 2;
 
     /*
     let (segment_images, segment_coordinates) =
