@@ -273,49 +273,49 @@ fn bitmap_create_from_gif_file(image_filepath: &str) -> Bitmap {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Pattern creation
 
-fn place_grid_markers_in_pattern(
+fn place_grid_labels_in_pattern(
     bitmap: &Bitmap,
     font: &BitmapFont,
     grid_size: i32,
-    place_marker_every: i32,
-    marker_start_x: i32,
-    marker_start_y: i32,
+    place_label_every: i32,
+    label_start_x: i32,
+    label_start_y: i32,
 ) -> Bitmap {
-    // Determine how many markers we need
-    let (marker_count_x, marker_count_y) = {
+    // Determine how many labels we need
+    let (label_count_x, label_count_y) = {
         let grid_count_x = bitmap.width / grid_size;
         let grid_count_y = bitmap.height / grid_size;
         (
-            grid_count_x / place_marker_every,
-            grid_count_y / place_marker_every,
+            grid_count_x / place_label_every,
+            grid_count_y / place_label_every,
         )
     };
 
     // Determine how much padding we need
-    let marker_padding = {
-        let marker_max_x = marker_start_x + marker_count_x * place_marker_every;
-        let marker_max_y = marker_start_y + marker_count_y * place_marker_every;
-        let marker_max = i32::max(marker_max_x, marker_max_y);
+    let label_padding = {
+        let label_max_x = label_start_x + label_count_x * place_label_every;
+        let label_max_y = label_start_y + label_count_y * place_label_every;
+        let label_max = i32::max(label_max_x, label_max_y);
         let text_dim = font
-            .get_text_bounding_rect(&format!("  {}  ", marker_max), 1)
+            .get_text_bounding_rect(&format!("  {}  ", label_max), 1)
             .dim;
         i32::max(text_dim.x, text_dim.y)
     };
 
     let mut result_bitmap = bitmap.extended(
-        marker_padding,
-        marker_padding,
-        marker_padding,
-        marker_padding,
+        label_padding,
+        label_padding,
+        label_padding,
+        label_padding,
         PixelRGBA::white(),
     );
 
-    // Add x markers
-    for marker_index in 0..=marker_count_x {
-        let text = (marker_start_x + marker_index * place_marker_every).to_string();
-        let x = marker_padding + marker_index * grid_size * place_marker_every;
-        let pos_top = Vec2i::new(x, marker_padding / 2);
-        let pos_bottom = Vec2i::new(x, result_bitmap.height - marker_padding / 2);
+    // Add x labels
+    for label_index in 0..=label_count_x {
+        let text = (label_start_x + label_index * place_label_every).to_string();
+        let x = label_padding + label_index * grid_size * place_label_every;
+        let pos_top = Vec2i::new(x, label_padding / 2);
+        let pos_bottom = Vec2i::new(x, result_bitmap.height - label_padding / 2);
 
         result_bitmap.draw_text_aligned_in_point_exact(
             font,
@@ -339,12 +339,12 @@ fn place_grid_markers_in_pattern(
         );
     }
 
-    // Add y markers
-    for marker_index in 0..=marker_count_y {
-        let text = (marker_start_y + marker_index * place_marker_every).to_string();
-        let y = marker_padding + marker_index * grid_size * place_marker_every;
-        let pos_left = Vec2i::new(marker_padding / 2, y);
-        let pos_right = Vec2i::new(result_bitmap.width - marker_padding / 2, y);
+    // Add y labels
+    for label_index in 0..=label_count_y {
+        let text = (label_start_y + label_index * place_label_every).to_string();
+        let y = label_padding + label_index * grid_size * place_label_every;
+        let pos_left = Vec2i::new(label_padding / 2, y);
+        let pos_right = Vec2i::new(result_bitmap.width - label_padding / 2, y);
 
         result_bitmap.draw_text_aligned_in_point_exact(
             font,
@@ -373,15 +373,15 @@ fn place_grid_markers_in_pattern(
 
 fn create_cross_stitch_pattern(
     bitmap: &Bitmap,
-    font_grid_marker: &BitmapFont,
+    font_grid_label: &BitmapFont,
     font_segment_index_indicator: &BitmapFont,
     image_filepath: &str,
     output_filename_suffix: &str,
     output_dir_suffix: &str,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
-    marker_start_x: i32,
-    marker_start_y: i32,
+    label_start_x: i32,
+    label_start_y: i32,
     colorize: bool,
     add_symbol: bool,
     add_thick_ten_grid: bool,
@@ -522,15 +522,15 @@ fn create_cross_stitch_pattern(
         }
     }
 
-    // Add 10-grid markers
+    // Add 10-grid labels
     let final_bitmap = if add_thick_ten_grid {
-        place_grid_markers_in_pattern(
+        place_grid_labels_in_pattern(
             &scaled_bitmap,
-            font_grid_marker,
+            font_grid_label,
             TILE_SIZE,
             10,
-            marker_start_x,
-            marker_start_y,
+            label_start_x,
+            label_start_y,
         )
     } else {
         scaled_bitmap
@@ -564,7 +564,7 @@ fn create_cross_stitch_pattern(
 
 fn create_cross_stitch_pattern_set(
     image: &Bitmap,
-    font_grid_marker: &BitmapFont,
+    font_grid_label: &BitmapFont,
     font_segment_index_indicator: &BitmapFont,
     image_filepath: &str,
     output_filename_suffix: &str,
@@ -572,23 +572,23 @@ fn create_cross_stitch_pattern_set(
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
-    marker_start_x: i32,
-    marker_start_y: i32,
+    label_start_x: i32,
+    label_start_y: i32,
     create_paint_by_number_set: bool,
 ) {
     rayon::scope(|scope| {
         scope.spawn(|_| {
             create_cross_stitch_pattern(
                 &image,
-                font_grid_marker,
+                font_grid_label,
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_colorized_".to_owned() + output_filename_suffix),
                 output_dir_suffix,
                 &color_mappings,
                 segment_index,
-                marker_start_x,
-                marker_start_y,
+                label_start_x,
+                label_start_y,
                 true,
                 true,
                 true,
@@ -598,15 +598,15 @@ fn create_cross_stitch_pattern_set(
         scope.spawn(|_| {
             create_cross_stitch_pattern(
                 &image,
-                font_grid_marker,
+                font_grid_label,
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_".to_owned() + output_filename_suffix),
                 output_dir_suffix,
                 &color_mappings,
                 segment_index,
-                marker_start_x,
-                marker_start_y,
+                label_start_x,
+                label_start_y,
                 false,
                 true,
                 true,
@@ -616,15 +616,15 @@ fn create_cross_stitch_pattern_set(
         scope.spawn(|_| {
             create_cross_stitch_pattern(
                 &image,
-                font_grid_marker,
+                font_grid_label,
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_colorized_no_symbols_".to_owned() + output_filename_suffix),
                 output_dir_suffix,
                 &color_mappings,
                 segment_index,
-                marker_start_x,
-                marker_start_y,
+                label_start_x,
+                label_start_y,
                 true,
                 false,
                 true,
@@ -635,15 +635,15 @@ fn create_cross_stitch_pattern_set(
             scope.spawn(|_| {
                 create_cross_stitch_pattern(
                     &image,
-                    font_grid_marker,
+                    font_grid_label,
                     font_segment_index_indicator,
                     &image_filepath,
                     &("paint_by_numbers_".to_owned() + output_filename_suffix),
                     output_dir_suffix,
                     &color_mappings_alphanum,
                     segment_index,
-                    marker_start_x,
-                    marker_start_y,
+                    label_start_x,
+                    label_start_y,
                     false,
                     true,
                     false,
@@ -669,7 +669,7 @@ fn draw_origin_line_horizontal(bitmap: &mut Bitmap, pos_y: i32) {
 
 /// NOTE: This assumes that the scaled bitmap width and height are a roughly a multiple of
 ///       grid_cell_size
-fn place_grid_markers_in_pattern_centered(
+fn place_grid_labels_in_pattern_centered(
     scaled_bitmap: &Bitmap,
     grid_cell_size: i32,
     font: &BitmapFont,
@@ -679,8 +679,8 @@ fn place_grid_markers_in_pattern_centered(
     let grid_width = scaled_bitmap.width / grid_cell_size;
     let grid_height = scaled_bitmap.height / grid_cell_size;
 
-    // Determine how much image-padding we need by calculating the maximum marker text dimension
-    let marker_padding = {
+    // Determine how much image-padding we need by calculating the maximum label text dimension
+    let label_padding = {
         let max_coordinates = [
             first_coordinate_x,
             first_coordinate_x + grid_width,
@@ -697,22 +697,22 @@ fn place_grid_markers_in_pattern_centered(
     };
 
     let mut result_bitmap = scaled_bitmap.extended(
-        marker_padding,
-        marker_padding,
-        marker_padding,
-        marker_padding,
+        label_padding,
+        label_padding,
+        label_padding,
+        label_padding,
         PixelRGBA::white(),
     );
 
-    // Add x markers
+    // Add x labels
     for x in 0..(grid_width + 1) {
         let coordinate_x = first_coordinate_x + x;
 
         if coordinate_x % 10 == 0 {
             let text = coordinate_x.to_string();
-            let draw_x = marker_padding + grid_cell_size * x;
-            let draw_pos_top = Vec2i::new(draw_x, marker_padding / 2);
-            let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - marker_padding / 2);
+            let draw_x = label_padding + grid_cell_size * x;
+            let draw_pos_top = Vec2i::new(draw_x, label_padding / 2);
+            let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - label_padding / 2);
 
             result_bitmap.draw_text_aligned_in_point_exact(
                 font,
@@ -737,15 +737,15 @@ fn place_grid_markers_in_pattern_centered(
         }
     }
 
-    // Add y markers
+    // Add y labels
     for y in 0..(grid_height + 1) {
         let coordinate_y = first_coordinate_y + y;
 
         if coordinate_y % 10 == 0 {
             let text = (-coordinate_y).to_string();
-            let draw_y = marker_padding + grid_cell_size * y;
-            let draw_pos_left = Vec2i::new(marker_padding / 2, draw_y);
-            let draw_pos_right = Vec2i::new(result_bitmap.width - marker_padding / 2, draw_y);
+            let draw_y = label_padding + grid_cell_size * y;
+            let draw_pos_left = Vec2i::new(label_padding / 2, draw_y);
+            let draw_pos_right = Vec2i::new(result_bitmap.width - label_padding / 2, draw_y);
 
             result_bitmap.draw_text_aligned_in_point_exact(
                 font,
@@ -775,7 +775,7 @@ fn place_grid_markers_in_pattern_centered(
 
 fn create_cross_stitch_pattern_centered(
     bitmap: &Bitmap,
-    font_grid_marker: &BitmapFont,
+    font_grid_label: &BitmapFont,
     font_segment_index_indicator: &BitmapFont,
     image_filepath: &str,
     output_filename_suffix: &str,
@@ -953,17 +953,17 @@ fn create_cross_stitch_pattern_centered(
         }
     }
 
-    // Add 10-grid markers
+    // Add 10-grid labels
     let final_bitmap = if add_thick_ten_grid {
         // NOTE: At this point the scaled bitmap might not be an exact multiple of the original
         //       bitmap because we may have padded it while drawing the origin grid bars. Therefore
-        //       the placement of the markers might be incorrectly shifted by two pixels. This is
+        //       the placement of the labels might be incorrectly shifted by two pixels. This is
         //       okay because it is not really visible and the code complexity to fix this is not
         //       worth it.
-        place_grid_markers_in_pattern_centered(
+        place_grid_labels_in_pattern_centered(
             &scaled_bitmap,
             TILE_SIZE,
-            font_grid_marker,
+            font_grid_label,
             first_coordinate_x,
             first_coordinate_y,
         )
@@ -999,7 +999,7 @@ fn create_cross_stitch_pattern_centered(
 
 fn create_cross_stitch_pattern_set_centered(
     image: &Bitmap,
-    font_grid_marker: &BitmapFont,
+    font_grid_label: &BitmapFont,
     font_segment_index_indicator: &BitmapFont,
     image_filepath: &str,
     output_filename_suffix: &str,
@@ -1015,7 +1015,7 @@ fn create_cross_stitch_pattern_set_centered(
         scope.spawn(|_| {
             create_cross_stitch_pattern_centered(
                 &image,
-                font_grid_marker,
+                font_grid_label,
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_colorized_".to_owned() + output_filename_suffix),
@@ -1035,7 +1035,7 @@ fn create_cross_stitch_pattern_set_centered(
         scope.spawn(|_| {
             create_cross_stitch_pattern_centered(
                 &image,
-                font_grid_marker,
+                font_grid_label,
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_".to_owned() + output_filename_suffix),
@@ -1053,7 +1053,7 @@ fn create_cross_stitch_pattern_set_centered(
         scope.spawn(|_| {
             create_cross_stitch_pattern_centered(
                 &image,
-                font_grid_marker,
+                font_grid_label,
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_colorized_no_symbols_".to_owned() + output_filename_suffix),
@@ -1072,7 +1072,7 @@ fn create_cross_stitch_pattern_set_centered(
             scope.spawn(|_| {
                 create_cross_stitch_pattern_centered(
                     &image,
-                    font_grid_marker,
+                    font_grid_label,
                     font_segment_index_indicator,
                     &image_filepath,
                     &("paint_by_numbers_".to_owned() + output_filename_suffix),
@@ -1183,8 +1183,8 @@ fn create_patterns_dir(
                 .zip(segment_coordinates.par_iter())
                 .enumerate()
                 .for_each(|(segment_index, (segment_image, segment_coordinate))| {
-                    let marker_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
-                    let marker_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
+                    let label_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
+                    let label_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
 
                     create_cross_stitch_pattern_set(
                         segment_image,
@@ -1196,8 +1196,8 @@ fn create_patterns_dir(
                         &color_mappings,
                         &color_mappings_alphanum,
                         Some(segment_index + 1),
-                        marker_start_x,
-                        marker_start_y,
+                        label_start_x,
+                        label_start_y,
                         false,
                     );
                 });
@@ -1263,8 +1263,8 @@ fn create_patterns_dir_centered(
                 .zip(segment_coordinates.par_iter())
                 .enumerate()
                 .for_each(|(segment_index, (segment_image, segment_coordinate))| {
-                    let marker_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
-                    let marker_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
+                    let label_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
+                    let label_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
 
                     create_cross_stitch_pattern_set(
                         segment_image,
@@ -1276,8 +1276,8 @@ fn create_patterns_dir_centered(
                         &color_mappings,
                         &color_mappings_alphanum,
                         Some(segment_index + 1),
-                        marker_start_x,
-                        marker_start_y,
+                        label_start_x,
+                        label_start_y,
                         false,
                     );
                 });
