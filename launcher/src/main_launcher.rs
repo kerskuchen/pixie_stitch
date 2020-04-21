@@ -95,8 +95,9 @@ fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> S
 // NOTE: THIS IS FOR INTERNAL TESTING
 #[cfg(debug_assertions)]
 fn get_image_filepaths_from_commandline() -> Vec<String> {
-    vec!["examples/nathan.png".to_owned()]
+    //vec!["examples/nathan.png".to_owned()]
     // vec!["examples/nathan.png".to_owned(), "examples/nathan_big.gif".to_owned()]
+    vec!["examples/nathan_big.gif".to_owned()]
 }
 
 #[cfg(not(debug_assertions))]
@@ -1031,7 +1032,6 @@ fn create_cross_stitch_pattern_set_centered(
                 PixelRGBA::white(),
             );
         });
-        /*
         scope.spawn(|_| {
             create_cross_stitch_pattern_centered(
                 &image,
@@ -1045,6 +1045,7 @@ fn create_cross_stitch_pattern_set_centered(
                 first_coordinate_x,
                 first_coordinate_y,
                 false,
+                true,
                 true,
                 true,
                 PixelRGBA::white(),
@@ -1065,6 +1066,7 @@ fn create_cross_stitch_pattern_set_centered(
                 true,
                 false,
                 true,
+                true,
                 PixelRGBA::white(),
             );
         });
@@ -1079,16 +1081,16 @@ fn create_cross_stitch_pattern_set_centered(
                     output_dir_suffix,
                     &color_mappings_alphanum,
                     segment_index,
-                first_coordinate_x,
-                first_coordinate_y,
+                    first_coordinate_x,
+                    first_coordinate_y,
                     false,
                     true,
+                    false,
                     false,
                     PixelRGBA::transparent(),
                 );
             });
         }
-        */
     });
 }
 
@@ -1217,25 +1219,21 @@ fn create_patterns_dir_centered(
     let image_center_x = math::make_even_upwards(image.width) / 2;
     let image_center_y = math::make_even_upwards(image.height) / 2;
 
-    /*
     let (segment_images, segment_coordinates) =
         image.to_segments(SPLIT_SEGMENT_WIDTH, SPLIT_SEGMENT_HEIGHT);
-    */
 
     rayon::scope(|scope| {
-        /*
-            // Legend
-            scope.spawn(|_| {
-                create_cross_stitch_legend(
-                    image.dim(),
-                    &color_mappings,
-                    &image_filepath,
-                    output_dir_suffix,
-                    &font,
-                    &segment_coordinates,
-                );
-            });
-        */
+        // Legend
+        scope.spawn(|_| {
+            create_cross_stitch_legend(
+                image.dim(),
+                &color_mappings,
+                &image_filepath,
+                output_dir_suffix,
+                &font,
+                &segment_coordinates,
+            );
+        });
 
         // Create patterns for complete set
         scope.spawn(|_| {
@@ -1255,7 +1253,6 @@ fn create_patterns_dir_centered(
             );
         });
 
-        /*
         // Create patterns for individual segments if needed
         if segment_images.len() > 1 {
             segment_images
@@ -1263,10 +1260,11 @@ fn create_patterns_dir_centered(
                 .zip(segment_coordinates.par_iter())
                 .enumerate()
                 .for_each(|(segment_index, (segment_image, segment_coordinate))| {
-                    let label_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x;
-                    let label_start_y = SPLIT_SEGMENT_HEIGHT * segment_coordinate.y;
+                    let label_start_x = SPLIT_SEGMENT_WIDTH * segment_coordinate.x - image_center_x;
+                    let label_start_y =
+                        SPLIT_SEGMENT_HEIGHT * segment_coordinate.y - image_center_y;
 
-                    create_cross_stitch_pattern_set(
+                    create_cross_stitch_pattern_set_centered(
                         segment_image,
                         &font,
                         &font_big,
@@ -1282,7 +1280,6 @@ fn create_patterns_dir_centered(
                     );
                 });
         }
-        */
     });
 }
 
