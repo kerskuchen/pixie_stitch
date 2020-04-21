@@ -257,6 +257,7 @@ dependencies = [
  "fern 0.5.9",
  "glow",
  "sdl2",
+ "serde",
 ]
 
 [[package]]
@@ -458,7 +459,6 @@ dependencies = [
  "ct_lib",
  "gif",
  "indexmap",
- "num_cpus",
  "rayon",
  "winapi",
 ]

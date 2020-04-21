@@ -35,37 +35,52 @@ struct ColorInfo {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Paths
 
-fn get_output_image_base_dir(image_filepath: &str) -> String {
-    let image_filename = system::path_to_filename_without_extension(image_filepath);
-    let output_root = if let Some(exe_path) = std::env::current_exe().ok() {
-        // We write into the exe filepath if possible
-        system::path_without_filename(&exe_path.to_string_owned())
+fn get_executable_dir() -> String {
+    if let Some(executable_path) = std::env::current_exe().ok() {
+        system::path_without_filename(executable_path.to_string_borrowed())
     } else {
-        system::path_without_filename(image_filepath)
-    };
-    // NOTE: We want each image to have its own folder with the same name as the image
-    system::path_join(&output_root, &image_filename)
+        ".".to_owned()
+    }
 }
 
-fn get_output_image_base_filepath(image_filepath: &str) -> String {
+/// Example:
+/// exe path: "C:\bin\pixie_stitch.exe"
+/// imagepath: "D:\images\example_image.png"
+/// output_dir_suffix: "centered"
+///
+/// This returns:
+/// "C:\bin\example_image_centered"
+fn get_image_output_dir(image_filepath: &str, output_dir_suffix: &str) -> String {
     let image_filename = system::path_to_filename_without_extension(image_filepath);
-    let output_dir_path = get_output_image_base_dir(image_filepath);
-    system::path_join(&output_dir_path, &image_filename)
+    let output_dir_root = get_executable_dir();
+    if output_dir_suffix.is_empty() {
+        system::path_join(&output_dir_root, &image_filename)
+    } else {
+        system::path_join(
+            &output_dir_root,
+            &(image_filename + "_" + output_dir_suffix),
+        )
+    }
 }
 
-fn create_output_image_base_dir(image_filepath: &str) {
-    let output_dir_path = get_output_image_base_dir(image_filepath);
-    std::fs::remove_dir_all(&output_dir_path).ok();
-    std::fs::create_dir_all(&output_dir_path)
-        .expect(&format!("Cannot create directory '{}'", &output_dir_path));
+fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
+    let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
+    std::fs::remove_dir_all(&output_dir).ok();
+    std::fs::create_dir_all(&output_dir)
+        .expect(&format!("Cannot create directory '{}'", &output_dir));
 }
 
+fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> String {
+    let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
+    let image_filename = system::path_to_filename_without_extension(image_filepath);
+    system::path_join(&output_dir, &image_filename)
+}
+
+// NOTE: THIS IS FOR INTERNAL TESTING
 #[cfg(debug_assertions)]
 fn get_image_filepaths_from_commandline() -> Vec<String> {
-    vec!["nachtlicht-pixel2.gif".to_owned()]
-    // vec!["Missingno.png".to_owned()]
-    // "bem_wurst.png".to_owned()
-    //vec!["nachtlicht-pixel2wolke_cross_stitch_colorized_plain.png".to_owned()]
+    vec!["nathan.png".to_owned()]
+    // vec!["nathan.png".to_owned(), "nathan_big.gif".to_owned()]
 }
 
 #[cfg(not(debug_assertions))]
@@ -122,21 +137,26 @@ pub fn load_fonts() -> (BitmapFont, BitmapFont) {
 }
 
 fn collect_symbols() -> Vec<Bitmap> {
-    let symbols_dir_path = if let Some(exe_path) = std::env::current_exe().ok() {
-        // We write into the exe filepath if possible
-        let output_dir = system::path_without_filename(&exe_path.to_string_owned());
-        system::path_join(&output_dir, "resources")
-    } else {
-        String::from("resources")
+    let executable_dir = get_executable_dir();
+    let symbols_dir = {
+        let candidate = system::path_join(&executable_dir, "resources");
+
+        if system::path_exists(&candidate) {
+            candidate
+        } else {
+            // There was no symbols dir in the executable dir. Lets try our current workingdir
+            "resources".to_owned()
+        }
     };
+
     assert!(
-        system::path_exists(&symbols_dir_path),
+        system::path_exists(&symbols_dir),
         "Missing `resources` path in '{}'",
-        symbols_dir_path
+        executable_dir
     );
 
     let mut symbols = Vec::new();
-    let symbols_filepaths = system::collect_files_by_extension_recursive(&symbols_dir_path, ".png");
+    let symbols_filepaths = system::collect_files_by_extension_recursive(&symbols_dir, ".png");
     for symbol_filepath in &symbols_filepaths {
         let symbol_bitmap = Bitmap::create_from_png_file(symbol_filepath);
         symbols.push(symbol_bitmap);
@@ -341,6 +361,7 @@ fn create_cross_stitch_pattern(
     font_segment_index_indicator: &BitmapFont,
     image_filepath: &str,
     output_filename_suffix: &str,
+    output_dir_suffix: &str,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
     marker_start_x: i32,
@@ -518,8 +539,10 @@ fn create_cross_stitch_pattern(
     };
 
     // Write out png image
-    let output_filepath =
-        get_output_image_base_filepath(&image_filepath) + "_" + output_filename_suffix + ".png";
+    let output_filepath = get_image_output_filepath(&image_filepath, output_dir_suffix)
+        + "_"
+        + output_filename_suffix
+        + ".png";
     Bitmap::write_to_png_file(&final_bitmap, &output_filepath);
 }
 
@@ -529,6 +552,7 @@ fn create_cross_stitch_pattern_set(
     font_segment_index_indicator: &BitmapFont,
     image_filepath: &str,
     output_filename_suffix: &str,
+    output_dir_suffix: &str,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
@@ -544,6 +568,7 @@ fn create_cross_stitch_pattern_set(
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_colorized_".to_owned() + output_filename_suffix),
+                output_dir_suffix,
                 &color_mappings,
                 segment_index,
                 marker_start_x,
@@ -561,6 +586,7 @@ fn create_cross_stitch_pattern_set(
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_".to_owned() + output_filename_suffix),
+                output_dir_suffix,
                 &color_mappings,
                 segment_index,
                 marker_start_x,
@@ -578,6 +604,7 @@ fn create_cross_stitch_pattern_set(
                 font_segment_index_indicator,
                 &image_filepath,
                 &("cross_stitch_colorized_no_symbols_".to_owned() + output_filename_suffix),
+                output_dir_suffix,
                 &color_mappings,
                 segment_index,
                 marker_start_x,
@@ -596,6 +623,7 @@ fn create_cross_stitch_pattern_set(
                     font_segment_index_indicator,
                     &image_filepath,
                     &("paint_by_numbers_".to_owned() + output_filename_suffix),
+                    output_dir_suffix,
                     &color_mappings_alphanum,
                     segment_index,
                     marker_start_x,
@@ -754,6 +782,7 @@ fn create_cross_stitch_legend(
     image_dimensions: Vec2i,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
     image_filepath: &str,
+    output_dir_suffix: &str,
     font: &BitmapFont,
     segment_layout_indices: &[Vec2i],
 ) {
@@ -838,7 +867,8 @@ fn create_cross_stitch_legend(
     let final_image = legend.extended(padding, padding, padding, padding, PixelRGBA::white());
 
     // Write out png image
-    let output_filepath = get_output_image_base_filepath(&image_filepath) + "_legend.png";
+    let output_filepath =
+        get_image_output_filepath(&image_filepath, output_dir_suffix) + "_legend.png";
     Bitmap::write_to_png_file(&final_image, &output_filepath);
 }
 
@@ -911,7 +941,8 @@ fn main() {
     */
 
     for image_filepath in get_image_filepaths_from_commandline() {
-        create_output_image_base_dir(&image_filepath);
+        create_image_output_dir(&image_filepath, "");
+        create_image_output_dir(&image_filepath, "centered");
 
         let image = open_image(&image_filepath);
 
@@ -944,6 +975,17 @@ fn main() {
                     image.dim(),
                     &color_mappings,
                     &image_filepath,
+                    "",
+                    &font,
+                    &segment_coordinates,
+                );
+            });
+            scope.spawn(|_| {
+                create_cross_stitch_legend(
+                    image.dim(),
+                    &color_mappings,
+                    &image_filepath,
+                    "centered",
                     &font,
                     &segment_coordinates,
                 );
@@ -956,6 +998,21 @@ fn main() {
                 &font_big,
                 &image_filepath,
                 "complete",
+                "",
+                &color_mappings,
+                &color_mappings_alphanum,
+                None,
+                0,
+                0,
+                true,
+            );
+            create_cross_stitch_pattern_set(
+                &image,
+                &font,
+                &font_big,
+                &image_filepath,
+                "complete",
+                "centered",
                 &color_mappings,
                 &color_mappings_alphanum,
                 None,
@@ -980,6 +1037,21 @@ fn main() {
                             &font_big,
                             &image_filepath,
                             &format!("segment_{}", segment_index + 1),
+                            "",
+                            &color_mappings,
+                            &color_mappings_alphanum,
+                            Some(segment_index + 1),
+                            marker_start_x,
+                            marker_start_y,
+                            false,
+                        );
+                        create_cross_stitch_pattern_set(
+                            segment_image,
+                            &font,
+                            &font_big,
+                            &image_filepath,
+                            &format!("segment_{}", segment_index + 1),
+                            "centered",
                             &color_mappings,
                             &color_mappings_alphanum,
                             Some(segment_index + 1),
@@ -1053,6 +1125,7 @@ fn test_symbols_contrast() {
         &font_big,
         "test_symbol_contrast.png",
         "cross_stitch_colorized",
+        "",
         &color_mappings,
         None,
         0,
