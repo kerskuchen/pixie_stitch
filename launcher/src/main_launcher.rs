@@ -95,9 +95,12 @@ fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> S
 // NOTE: THIS IS FOR INTERNAL TESTING
 #[cfg(debug_assertions)]
 fn get_image_filepaths_from_commandline() -> Vec<String> {
-    //vec!["examples/nathan.png".to_owned()]
-    // vec!["examples/nathan.png".to_owned(), "examples/nathan_big.gif".to_owned()]
-    vec!["examples/nathan_big.gif".to_owned()]
+    // vec!["examples/nathan.png".to_owned()]
+    // vec!["examples/nathan_big.gif".to_owned()]
+    vec![
+        "examples/nathan.png".to_owned(),
+        "examples/nathan_big.gif".to_owned(),
+    ]
 }
 
 #[cfg(not(debug_assertions))]
@@ -674,19 +677,22 @@ fn place_grid_labels_in_pattern_centered(
     scaled_bitmap: &Bitmap,
     grid_cell_size: i32,
     font: &BitmapFont,
-    first_coordinate_x: i32,
-    first_coordinate_y: i32,
+    global_first_coordinate_x: i32,
+    global_first_coordinate_y: i32,
 ) -> Bitmap {
     let grid_width = scaled_bitmap.width / grid_cell_size;
     let grid_height = scaled_bitmap.height / grid_cell_size;
 
+    let global_last_coordinate_x = global_first_coordinate_x + grid_width;
+    let global_last_coordinate_y = global_first_coordinate_y + grid_height;
+
     // Determine how much image-padding we need by calculating the maximum label text dimension
     let label_padding = {
         let max_coordinates = [
-            first_coordinate_x,
-            first_coordinate_x + grid_width,
-            first_coordinate_y,
-            first_coordinate_y + grid_height,
+            global_first_coordinate_x,
+            global_first_coordinate_y,
+            global_last_coordinate_x,
+            global_last_coordinate_y,
         ];
         let max_text_charcount = max_coordinates
             .iter()
@@ -705,70 +711,123 @@ fn place_grid_labels_in_pattern_centered(
         PixelRGBA::white(),
     );
 
-    // Add x labels
-    for x in 0..(grid_width + 1) {
-        let coordinate_x = first_coordinate_x + x;
-
-        if coordinate_x % 10 == 0 {
-            let text = coordinate_x.to_string();
-            let draw_x = label_padding + grid_cell_size * x;
-            let draw_pos_top = Vec2i::new(draw_x, label_padding / 2);
-            let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - label_padding / 2);
-
-            result_bitmap.draw_text_aligned_in_point_exact(
-                font,
-                &text,
-                1,
-                draw_pos_top,
-                Vec2i::zero(),
-                false,
-                AlignmentHorizontal::Center,
-                AlignmentVertical::Center,
-            );
-            result_bitmap.draw_text_aligned_in_point_exact(
-                font,
-                &text,
-                1,
-                draw_pos_bottom,
-                Vec2i::zero(),
-                false,
-                AlignmentHorizontal::Center,
-                AlignmentVertical::Center,
-            );
+    // Determine all x label positions
+    let label_coords_x = {
+        let mut result = Vec::new();
+        for local_coord_x in 0..(grid_width + 1) {
+            let global_coord_x = global_first_coordinate_x + local_coord_x;
+            if global_coord_x % 10 == 0 {
+                result.push((local_coord_x, global_coord_x));
+            }
         }
+
+        // Add label for first and last horizontal grid pixel so that we don't mix up a remaining
+        // 7, 8 or 9 pixel block with a 10 block
+        let pixel_count_in_first_block_horizontal = i32::abs(
+            ceil_to_multiple_of_target_i32(global_first_coordinate_x, 10)
+                - global_first_coordinate_x,
+        );
+        if pixel_count_in_first_block_horizontal > 3 {
+            result.push((0, global_first_coordinate_x));
+        }
+        let pixel_count_in_last_block_horizontal = i32::abs(
+            floor_to_multiple_of_target_i32(global_last_coordinate_x, 10)
+                - global_last_coordinate_x,
+        );
+        if pixel_count_in_last_block_horizontal > 3 {
+            result.push((grid_width, global_last_coordinate_x));
+        }
+
+        result
+    };
+
+    // Draw x labels
+    for (local_coord_x, global_coord_x) in label_coords_x {
+        let text = global_coord_x.to_string();
+        let draw_x = label_padding + grid_cell_size * local_coord_x;
+        let draw_pos_top = Vec2i::new(draw_x, label_padding / 2);
+        let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - label_padding / 2);
+
+        result_bitmap.draw_text_aligned_in_point_exact(
+            font,
+            &text,
+            1,
+            draw_pos_top,
+            Vec2i::zero(),
+            false,
+            AlignmentHorizontal::Center,
+            AlignmentVertical::Center,
+        );
+        result_bitmap.draw_text_aligned_in_point_exact(
+            font,
+            &text,
+            1,
+            draw_pos_bottom,
+            Vec2i::zero(),
+            false,
+            AlignmentHorizontal::Center,
+            AlignmentVertical::Center,
+        );
     }
 
-    // Add y labels
-    for y in 0..(grid_height + 1) {
-        let coordinate_y = first_coordinate_y + y;
-
-        if coordinate_y % 10 == 0 {
-            let text = (-coordinate_y).to_string();
-            let draw_y = label_padding + grid_cell_size * y;
-            let draw_pos_left = Vec2i::new(label_padding / 2, draw_y);
-            let draw_pos_right = Vec2i::new(result_bitmap.width - label_padding / 2, draw_y);
-
-            result_bitmap.draw_text_aligned_in_point_exact(
-                font,
-                &text,
-                1,
-                draw_pos_left,
-                Vec2i::zero(),
-                false,
-                AlignmentHorizontal::Center,
-                AlignmentVertical::Center,
-            );
-            result_bitmap.draw_text_aligned_in_point_exact(
-                font,
-                &text,
-                1,
-                draw_pos_right,
-                Vec2i::zero(),
-                false,
-                AlignmentHorizontal::Center,
-                AlignmentVertical::Center,
-            );
+    // Determine all y label positions
+    let label_coords_y = {
+        let mut result = Vec::new();
+        for local_coord_y in 0..(grid_height + 1) {
+            let global_coord_y = global_first_coordinate_y + local_coord_y;
+            if global_coord_y % 10 == 0 {
+                result.push((local_coord_y, global_coord_y));
+            }
         }
+
+        // Add label for first and last vertical grid pixel so that we don't mix up a remaining
+        // 7, 8 or 9 pixel block with a 10 block
+        let pixel_count_in_first_block_vertical = i32::abs(
+            ceil_to_multiple_of_target_i32(global_first_coordinate_y, 10)
+                - global_first_coordinate_y,
+        );
+        if pixel_count_in_first_block_vertical > 3 {
+            result.push((0, global_first_coordinate_y));
+        }
+        let pixel_count_in_last_block_vertical = i32::abs(
+            floor_to_multiple_of_target_i32(global_last_coordinate_y, 10)
+                - global_last_coordinate_y,
+        );
+        if pixel_count_in_last_block_vertical > 3 {
+            result.push((grid_height, global_last_coordinate_y));
+        }
+
+        result
+    };
+
+    // Draw y labels
+    for (local_coord_y, global_coord_y) in label_coords_y {
+        // NOTE: In pixel space our y-coordinates are y-down. We want cartesian y-up so we negate y
+        let text = (-global_coord_y).to_string();
+        let draw_y = label_padding + grid_cell_size * local_coord_y;
+        let draw_pos_left = Vec2i::new(label_padding / 2, draw_y);
+        let draw_pos_right = Vec2i::new(result_bitmap.width - label_padding / 2, draw_y);
+
+        result_bitmap.draw_text_aligned_in_point_exact(
+            font,
+            &text,
+            1,
+            draw_pos_left,
+            Vec2i::zero(),
+            false,
+            AlignmentHorizontal::Center,
+            AlignmentVertical::Center,
+        );
+        result_bitmap.draw_text_aligned_in_point_exact(
+            font,
+            &text,
+            1,
+            draw_pos_right,
+            Vec2i::zero(),
+            false,
+            AlignmentHorizontal::Center,
+            AlignmentVertical::Center,
+        );
     }
 
     result_bitmap
