@@ -671,18 +671,18 @@ fn draw_origin_line_horizontal(bitmap: &mut Bitmap, pos_y: i32) {
     }
 }
 
-/// If the grid of the given scaled bitmap does not start at (0,0) then a draw_offset can be passed
-/// for correction
+/// NOTE: This assumes that the scaled bitmap width and height are a roughly a multiple of
+///       grid_cell_size
 fn place_grid_markers_in_pattern_centered(
     scaled_bitmap: &Bitmap,
+    grid_cell_size: i32,
     font: &BitmapFont,
     first_coordinate_x: i32,
     first_coordinate_y: i32,
-    grid_width: i32,
-    grid_height: i32,
-    grid_cell_size: i32,
-    draw_offset: Vec2i,
 ) -> Bitmap {
+    let grid_width = scaled_bitmap.width / grid_cell_size;
+    let grid_height = scaled_bitmap.height / grid_cell_size;
+
     // Determine how much image-padding we need by calculating the maximum marker text dimension
     let marker_padding = {
         let max_coordinates = [
@@ -722,7 +722,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_top + draw_offset,
+                draw_pos_top,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -732,7 +732,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_bottom + draw_offset,
+                draw_pos_bottom,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -755,7 +755,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_left + draw_offset,
+                draw_pos_left,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -765,7 +765,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_right + draw_offset,
+                draw_pos_right,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -912,7 +912,7 @@ fn create_cross_stitch_pattern_centered(
     }
 
     // Add origin grid
-    let draw_offset = if add_origin_grid {
+    if add_origin_grid {
         let origin_bitmap_coord_x = -first_coordinate_x;
         if 0 < origin_bitmap_coord_x && origin_bitmap_coord_x < bitmap.width {
             draw_origin_line_vertical(&mut scaled_bitmap, TILE_SIZE * origin_bitmap_coord_x);
@@ -955,23 +955,21 @@ fn create_cross_stitch_pattern_centered(
         if needs_grid_bottom {
             draw_origin_line_horizontal(&mut scaled_bitmap, scaled_bitmap_height);
         }
-
-        Vec2i::new(padding_left, padding_top)
-    } else {
-        Vec2i::zero()
-    };
+    }
 
     // Add 10-grid markers
     let final_bitmap = if add_thick_ten_grid {
+        // NOTE: At this point the scaled bitmap might not be an exact multiple of the original
+        //       bitmap because we may have padded it while drawing the origin grid bars. Therefore
+        //       the placement of the markers might be incorrectly shifted by two pixels. This is
+        //       okay because it is not really visible and the code complexity to fix this is not
+        //       worth it.
         place_grid_markers_in_pattern_centered(
             &scaled_bitmap,
+            TILE_SIZE,
             font_grid_marker,
             first_coordinate_x,
             first_coordinate_y,
-            bitmap.width,
-            bitmap.height,
-            TILE_SIZE,
-            draw_offset,
         )
     } else {
         scaled_bitmap
@@ -1220,8 +1218,8 @@ fn create_patterns_dir_centered(
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let output_dir_suffix = "centered";
-    let image_center_x = 0; //math::make_even_upwards(image.width);
-    let image_center_y = 0; //math::make_even_upwards(image.height);
+    let image_center_x = math::make_even_upwards(image.width);
+    let image_center_y = math::make_even_upwards(image.height);
 
     /*
     let (segment_images, segment_coordinates) =
