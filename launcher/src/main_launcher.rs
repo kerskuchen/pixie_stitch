@@ -678,10 +678,7 @@ fn place_grid_markers_in_pattern_centered(
             .max()
             .unwrap();
 
-        let max_text_width = font.horizontal_advance_max * max_text_charcount as i32;
-        let max_text_height = font.vertical_advance;
-
-        i32::max(max_text_width, max_text_height)
+        font.horizontal_advance_max * (max_text_charcount + 3) as i32
     };
 
     let mut result_bitmap = bitmap.extended(
@@ -693,7 +690,7 @@ fn place_grid_markers_in_pattern_centered(
     );
 
     // Add x markers
-    for x in 0..(bitmap.width / grid_size) {
+    for x in 0..((bitmap.width / grid_size) + 1) {
         let coordinate_x = first_coordinate_x + x;
 
         if coordinate_x % 10 == 0 {
@@ -726,7 +723,7 @@ fn place_grid_markers_in_pattern_centered(
     }
 
     // Add y markers
-    for y in 0..(bitmap.height / grid_size) {
+    for y in 0..((bitmap.height / grid_size) + 1) {
         let coordinate_y = first_coordinate_y + y;
 
         if coordinate_y % 10 == 0 {
@@ -820,140 +817,84 @@ fn create_cross_stitch_pattern_centered(
                     symbol_mask_color,
                 );
             }
-
-            // Add 1x1 grid
-            scaled_bitmap.draw_rect_filled(
-                TILE_SIZE * x,
-                TILE_SIZE * y,
-                1,
-                TILE_SIZE,
-                COLOR_GRID_THIN,
-            );
-            scaled_bitmap.draw_rect_filled(
-                TILE_SIZE * x,
-                TILE_SIZE * y,
-                TILE_SIZE,
-                1,
-                COLOR_GRID_THIN,
-            );
-
-            // Add 10x10 grid
-            if add_thick_ten_grid {
-                let coordinate_x = first_coordinate_x + x;
-                let coordinate_y = first_coordinate_y + y;
-                if coordinate_x % 10 == 0 {
-                    scaled_bitmap.draw_rect_filled(
-                        TILE_SIZE * x,
-                        TILE_SIZE * y,
-                        2,
-                        TILE_SIZE,
-                        COLOR_GRID_THICK,
-                    );
-                }
-                if coordinate_y % 10 == 0 {
-                    scaled_bitmap.draw_rect_filled(
-                        TILE_SIZE * x,
-                        TILE_SIZE * y,
-                        TILE_SIZE,
-                        2,
-                        COLOR_GRID_THICK,
-                    );
-                }
-            }
-
-            // Add origin grid
-            if add_origin_grid {
-                let coordinate_x = first_coordinate_x + x;
-                let coordinate_y = first_coordinate_y + y;
-                if coordinate_x == 0 {
-                    scaled_bitmap.draw_rect_filled_safely(
-                        TILE_SIZE * x - 2,
-                        TILE_SIZE * y,
-                        4,
-                        TILE_SIZE,
-                        PixelRGBA::black(),
-                    );
-                    for offset_y in (0..TILE_SIZE).step_by(8) {
-                        scaled_bitmap.draw_rect_filled_safely(
-                            TILE_SIZE * x - 1,
-                            TILE_SIZE * y + offset_y,
-                            2,
-                            4,
-                            PixelRGBA::black(),
-                        );
-                        scaled_bitmap.draw_rect_filled_safely(
-                            TILE_SIZE * x - 1,
-                            TILE_SIZE * y + offset_y + 2,
-                            2,
-                            4,
-                            PixelRGBA::white(),
-                        );
-                    }
-                }
-                if coordinate_y == 0 {
-                    scaled_bitmap.draw_rect_filled_safely(
-                        TILE_SIZE * x,
-                        TILE_SIZE * y - 2,
-                        TILE_SIZE,
-                        4,
-                        PixelRGBA::black(),
-                    );
-                    for offset_y in (0..TILE_SIZE).step_by(8) {
-                        scaled_bitmap.draw_rect_filled_safely(
-                            TILE_SIZE * x + offset_y,
-                            TILE_SIZE * y - 1,
-                            4,
-                            2,
-                            PixelRGBA::black(),
-                        );
-                        scaled_bitmap.draw_rect_filled_safely(
-                            TILE_SIZE * x + offset_y + 2,
-                            TILE_SIZE * y - 1,
-                            4,
-                            2,
-                            PixelRGBA::white(),
-                        );
-                    }
-                }
-            }
         }
     }
 
-    // Close 1x1 line on right bitmap border
+    // Add 1x1 grid
+    for x in 0..bitmap.width {
+        scaled_bitmap.draw_rect_filled(
+            TILE_SIZE * x,
+            0,
+            1,
+            TILE_SIZE * bitmap.height,
+            COLOR_GRID_THIN,
+        );
+    }
+    for y in 0..bitmap.height {
+        scaled_bitmap.draw_rect_filled(
+            0,
+            TILE_SIZE * y,
+            TILE_SIZE * bitmap.width,
+            1,
+            COLOR_GRID_THIN,
+        );
+    }
+    // Close 1x1 grid line on bottom-right bitmap border
     scaled_bitmap.draw_rect_filled(
-        TILE_SIZE * bitmap.width - 1,
+        (TILE_SIZE * bitmap.width) - 1,
         0,
         1,
         TILE_SIZE * bitmap.height,
         COLOR_GRID_THIN,
     );
-    // Close 1x1 line on bottom bitmap border
     scaled_bitmap.draw_rect_filled(
         0,
-        TILE_SIZE * bitmap.height - 1,
+        (TILE_SIZE * bitmap.height) - 1,
         TILE_SIZE * bitmap.width,
         1,
         COLOR_GRID_THIN,
     );
 
+    // Add 10x10 grid
     if add_thick_ten_grid {
-        // Close 10x10 line on right bitmap border
-        let coordinate_x = first_coordinate_x + bitmap.width;
-        if coordinate_x % 10 == 0 {
+        for x in 0..bitmap.width {
+            let coordinate_x = first_coordinate_x + x;
+            if coordinate_x % 10 == 0 {
+                scaled_bitmap.draw_rect_filled(
+                    TILE_SIZE * x,
+                    0,
+                    2,
+                    TILE_SIZE * bitmap.height,
+                    COLOR_GRID_THICK,
+                );
+            }
+        }
+        for y in 0..bitmap.height {
+            let coordinate_y = first_coordinate_y + y;
+            if coordinate_y % 10 == 0 {
+                scaled_bitmap.draw_rect_filled(
+                    0,
+                    TILE_SIZE * y,
+                    TILE_SIZE * bitmap.width,
+                    2,
+                    COLOR_GRID_THICK,
+                );
+            }
+        }
+        // Close 10x10 grid line on bottom-right bitmap border if necessary
+        if (first_coordinate_x + bitmap.width) % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
-                TILE_SIZE * bitmap.width - 2,
+                (TILE_SIZE * bitmap.width) - 2,
                 0,
                 2,
                 TILE_SIZE * bitmap.height,
                 COLOR_GRID_THICK,
             );
         }
-        // Close 10x10 line on bottom bitmap border
-        let coordinate_y = first_coordinate_y + bitmap.height;
-        if coordinate_y % 10 == 0 {
+        if (first_coordinate_y + bitmap.height) % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
                 0,
-                TILE_SIZE * bitmap.height - 2,
+                (TILE_SIZE * bitmap.height) - 2,
                 TILE_SIZE * bitmap.width,
                 2,
                 COLOR_GRID_THICK,
@@ -961,6 +902,48 @@ fn create_cross_stitch_pattern_centered(
         }
     }
 
+    // Add origin grid
+    if add_origin_grid {
+        let origin_bitmap_coord_x = -first_coordinate_x;
+        if 0 <= origin_bitmap_coord_x && origin_bitmap_coord_x <= bitmap.width {
+            scaled_bitmap.draw_rect_filled_safely(
+                (TILE_SIZE * origin_bitmap_coord_x) - 2,
+                0,
+                4,
+                TILE_SIZE * bitmap.height,
+                PixelRGBA::black(),
+            );
+            for offset_y in (0..(TILE_SIZE * bitmap.height)).step_by(8) {
+                scaled_bitmap.draw_rect_filled_safely(
+                    (TILE_SIZE * origin_bitmap_coord_x) - 1,
+                    offset_y + 2,
+                    2,
+                    4,
+                    PixelRGBA::white(),
+                );
+            }
+        }
+
+        let origin_bitmap_coord_y = -first_coordinate_y;
+        if 0 <= origin_bitmap_coord_y && origin_bitmap_coord_y <= bitmap.height {
+            scaled_bitmap.draw_rect_filled_safely(
+                0,
+                (TILE_SIZE * origin_bitmap_coord_y) - 2,
+                TILE_SIZE * bitmap.width,
+                4,
+                PixelRGBA::black(),
+            );
+            for offset_x in (0..(TILE_SIZE * bitmap.width)).step_by(8) {
+                scaled_bitmap.draw_rect_filled_safely(
+                    offset_x + 2,
+                    (TILE_SIZE * origin_bitmap_coord_y) - 1,
+                    4,
+                    2,
+                    PixelRGBA::white(),
+                );
+            }
+        }
+    }
     // Add 10-grid markers
     let final_bitmap = if add_thick_ten_grid {
         place_grid_markers_in_pattern_centered(
