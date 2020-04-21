@@ -657,20 +657,39 @@ fn create_cross_stitch_pattern_set(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Pattern creation centered
 
+fn draw_origin_line_vertical(bitmap: &mut Bitmap, pos_x: i32) {
+    bitmap.draw_rect_filled_safely(pos_x - 2, 0, 4, bitmap.height, PixelRGBA::black());
+    for offset_y in (0..bitmap.height).step_by(8) {
+        bitmap.draw_rect_filled_safely(pos_x - 1, offset_y + 2, 2, 4, PixelRGBA::white());
+    }
+}
+
+fn draw_origin_line_horizontal(bitmap: &mut Bitmap, pos_y: i32) {
+    bitmap.draw_rect_filled_safely(0, pos_y - 2, bitmap.width, 4, PixelRGBA::black());
+    for offset_x in (0..bitmap.width).step_by(8) {
+        bitmap.draw_rect_filled_safely(offset_x + 2, pos_y - 1, 4, 2, PixelRGBA::white());
+    }
+}
+
+/// If the grid of the given scaled bitmap does not start at (0,0) then a draw_offset can be passed
+/// for correction
 fn place_grid_markers_in_pattern_centered(
-    bitmap: &Bitmap,
+    scaled_bitmap: &Bitmap,
     font: &BitmapFont,
-    grid_size: i32,
     first_coordinate_x: i32,
     first_coordinate_y: i32,
+    grid_width: i32,
+    grid_height: i32,
+    grid_cell_size: i32,
+    draw_offset: Vec2i,
 ) -> Bitmap {
     // Determine how much image-padding we need by calculating the maximum marker text dimension
     let marker_padding = {
         let max_coordinates = [
             first_coordinate_x,
-            first_coordinate_x + bitmap.width,
+            first_coordinate_x + grid_width,
             first_coordinate_y,
-            first_coordinate_y + bitmap.height,
+            first_coordinate_y + grid_height,
         ];
         let max_text_charcount = max_coordinates
             .iter()
@@ -678,10 +697,10 @@ fn place_grid_markers_in_pattern_centered(
             .max()
             .unwrap();
 
-        font.horizontal_advance_max * (max_text_charcount + 3) as i32
+        font.horizontal_advance_max * (max_text_charcount + 4) as i32
     };
 
-    let mut result_bitmap = bitmap.extended(
+    let mut result_bitmap = scaled_bitmap.extended(
         marker_padding,
         marker_padding,
         marker_padding,
@@ -690,12 +709,12 @@ fn place_grid_markers_in_pattern_centered(
     );
 
     // Add x markers
-    for x in 0..((bitmap.width / grid_size) + 1) {
+    for x in 0..(grid_width + 1) {
         let coordinate_x = first_coordinate_x + x;
 
         if coordinate_x % 10 == 0 {
             let text = coordinate_x.to_string();
-            let draw_x = marker_padding + grid_size * x;
+            let draw_x = marker_padding + grid_cell_size * x;
             let draw_pos_top = Vec2i::new(draw_x, marker_padding / 2);
             let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - marker_padding / 2);
 
@@ -703,7 +722,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_top,
+                draw_pos_top + draw_offset,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -713,7 +732,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_bottom,
+                draw_pos_bottom + draw_offset,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -723,12 +742,12 @@ fn place_grid_markers_in_pattern_centered(
     }
 
     // Add y markers
-    for y in 0..((bitmap.height / grid_size) + 1) {
+    for y in 0..(grid_height + 1) {
         let coordinate_y = first_coordinate_y + y;
 
         if coordinate_y % 10 == 0 {
             let text = (-coordinate_y).to_string();
-            let draw_y = marker_padding + grid_size * y;
+            let draw_y = marker_padding + grid_cell_size * y;
             let draw_pos_left = Vec2i::new(marker_padding / 2, draw_y);
             let draw_pos_right = Vec2i::new(result_bitmap.width - marker_padding / 2, draw_y);
 
@@ -736,7 +755,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_left,
+                draw_pos_left + draw_offset,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -746,7 +765,7 @@ fn place_grid_markers_in_pattern_centered(
                 font,
                 &text,
                 1,
-                draw_pos_right,
+                draw_pos_right + draw_offset,
                 Vec2i::zero(),
                 false,
                 AlignmentHorizontal::Center,
@@ -779,6 +798,8 @@ fn create_cross_stitch_pattern_centered(
         (TILE_SIZE * bitmap.width) as u32,
         (TILE_SIZE * bitmap.height) as u32,
     );
+    let scaled_bitmap_width = scaled_bitmap.width;
+    let scaled_bitmap_height = scaled_bitmap.height;
 
     for y in 0..bitmap.height {
         for x in 0..bitmap.width {
@@ -822,35 +843,23 @@ fn create_cross_stitch_pattern_centered(
 
     // Add 1x1 grid
     for x in 0..bitmap.width {
-        scaled_bitmap.draw_rect_filled(
-            TILE_SIZE * x,
-            0,
-            1,
-            TILE_SIZE * bitmap.height,
-            COLOR_GRID_THIN,
-        );
+        scaled_bitmap.draw_rect_filled(TILE_SIZE * x, 0, 1, scaled_bitmap_height, COLOR_GRID_THIN);
     }
     for y in 0..bitmap.height {
-        scaled_bitmap.draw_rect_filled(
-            0,
-            TILE_SIZE * y,
-            TILE_SIZE * bitmap.width,
-            1,
-            COLOR_GRID_THIN,
-        );
+        scaled_bitmap.draw_rect_filled(0, TILE_SIZE * y, scaled_bitmap_width, 1, COLOR_GRID_THIN);
     }
     // Close 1x1 grid line on bottom-right bitmap border
     scaled_bitmap.draw_rect_filled(
-        (TILE_SIZE * bitmap.width) - 1,
+        scaled_bitmap_width - 1,
         0,
         1,
-        TILE_SIZE * bitmap.height,
+        scaled_bitmap_height,
         COLOR_GRID_THIN,
     );
     scaled_bitmap.draw_rect_filled(
         0,
-        (TILE_SIZE * bitmap.height) - 1,
-        TILE_SIZE * bitmap.width,
+        scaled_bitmap_height - 1,
+        scaled_bitmap_width,
         1,
         COLOR_GRID_THIN,
     );
@@ -864,7 +873,7 @@ fn create_cross_stitch_pattern_centered(
                     TILE_SIZE * x,
                     0,
                     2,
-                    TILE_SIZE * bitmap.height,
+                    scaled_bitmap_height,
                     COLOR_GRID_THICK,
                 );
             }
@@ -875,7 +884,7 @@ fn create_cross_stitch_pattern_centered(
                 scaled_bitmap.draw_rect_filled(
                     0,
                     TILE_SIZE * y,
-                    TILE_SIZE * bitmap.width,
+                    scaled_bitmap_width,
                     2,
                     COLOR_GRID_THICK,
                 );
@@ -884,18 +893,18 @@ fn create_cross_stitch_pattern_centered(
         // Close 10x10 grid line on bottom-right bitmap border if necessary
         if (first_coordinate_x + bitmap.width) % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
-                (TILE_SIZE * bitmap.width) - 2,
+                scaled_bitmap_width - 2,
                 0,
                 2,
-                TILE_SIZE * bitmap.height,
+                scaled_bitmap_height,
                 COLOR_GRID_THICK,
             );
         }
         if (first_coordinate_y + bitmap.height) % 10 == 0 {
             scaled_bitmap.draw_rect_filled(
                 0,
-                (TILE_SIZE * bitmap.height) - 2,
-                TILE_SIZE * bitmap.width,
+                scaled_bitmap_height - 2,
+                scaled_bitmap_width,
                 2,
                 COLOR_GRID_THICK,
             );
@@ -903,55 +912,66 @@ fn create_cross_stitch_pattern_centered(
     }
 
     // Add origin grid
-    if add_origin_grid {
+    let draw_offset = if add_origin_grid {
         let origin_bitmap_coord_x = -first_coordinate_x;
-        if 0 <= origin_bitmap_coord_x && origin_bitmap_coord_x <= bitmap.width {
-            scaled_bitmap.draw_rect_filled_safely(
-                (TILE_SIZE * origin_bitmap_coord_x) - 2,
-                0,
-                4,
-                TILE_SIZE * bitmap.height,
-                PixelRGBA::black(),
-            );
-            for offset_y in (0..(TILE_SIZE * bitmap.height)).step_by(8) {
-                scaled_bitmap.draw_rect_filled_safely(
-                    (TILE_SIZE * origin_bitmap_coord_x) - 1,
-                    offset_y + 2,
-                    2,
-                    4,
-                    PixelRGBA::white(),
-                );
-            }
+        if 0 < origin_bitmap_coord_x && origin_bitmap_coord_x < bitmap.width {
+            draw_origin_line_vertical(&mut scaled_bitmap, TILE_SIZE * origin_bitmap_coord_x);
         }
 
         let origin_bitmap_coord_y = -first_coordinate_y;
-        if 0 <= origin_bitmap_coord_y && origin_bitmap_coord_y <= bitmap.height {
-            scaled_bitmap.draw_rect_filled_safely(
-                0,
-                (TILE_SIZE * origin_bitmap_coord_y) - 2,
-                TILE_SIZE * bitmap.width,
-                4,
-                PixelRGBA::black(),
-            );
-            for offset_x in (0..(TILE_SIZE * bitmap.width)).step_by(8) {
-                scaled_bitmap.draw_rect_filled_safely(
-                    offset_x + 2,
-                    (TILE_SIZE * origin_bitmap_coord_y) - 1,
-                    4,
-                    2,
-                    PixelRGBA::white(),
-                );
-            }
+        if 0 < origin_bitmap_coord_y && origin_bitmap_coord_y < bitmap.height {
+            draw_origin_line_horizontal(&mut scaled_bitmap, TILE_SIZE * origin_bitmap_coord_y);
         }
-    }
+
+        // NOTE: If our origin grid is located on the edge of our image we want to extend our image
+        //       so that the origin grid is drawn more clearly visible
+        let needs_grid_left = first_coordinate_x == 0;
+        let needs_grid_top = first_coordinate_y == 0;
+        let needs_grid_right = first_coordinate_x + bitmap.width == 0;
+        let needs_grid_bottom = first_coordinate_y + bitmap.height == 0;
+
+        let padding_left = if needs_grid_left { 2 } else { 0 };
+        let padding_top = if needs_grid_top { 2 } else { 0 };
+        let padding_right = if needs_grid_right { 2 } else { 0 };
+        let padding_bottom = if needs_grid_bottom { 2 } else { 0 };
+
+        scaled_bitmap.extend(
+            padding_left,
+            padding_top,
+            padding_right,
+            padding_bottom,
+            PixelRGBA::white(),
+        );
+
+        if needs_grid_left {
+            draw_origin_line_vertical(&mut scaled_bitmap, 2);
+        }
+        if needs_grid_right {
+            draw_origin_line_vertical(&mut scaled_bitmap, scaled_bitmap_width);
+        }
+        if needs_grid_top {
+            draw_origin_line_horizontal(&mut scaled_bitmap, 2);
+        }
+        if needs_grid_bottom {
+            draw_origin_line_horizontal(&mut scaled_bitmap, scaled_bitmap_height);
+        }
+
+        Vec2i::new(padding_left, padding_top)
+    } else {
+        Vec2i::zero()
+    };
+
     // Add 10-grid markers
     let final_bitmap = if add_thick_ten_grid {
         place_grid_markers_in_pattern_centered(
             &scaled_bitmap,
             font_grid_marker,
-            TILE_SIZE,
             first_coordinate_x,
             first_coordinate_y,
+            bitmap.width,
+            bitmap.height,
+            TILE_SIZE,
+            draw_offset,
         )
     } else {
         scaled_bitmap
@@ -1200,8 +1220,8 @@ fn create_patterns_dir_centered(
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let output_dir_suffix = "centered";
-    let image_center_x = math::make_even_upwards(image.width) / 2;
-    let image_center_y = math::make_even_upwards(image.height) / 2;
+    let image_center_x = 0; //math::make_even_upwards(image.width);
+    let image_center_y = 0; //math::make_even_upwards(image.height);
 
     /*
     let (segment_images, segment_coordinates) =
