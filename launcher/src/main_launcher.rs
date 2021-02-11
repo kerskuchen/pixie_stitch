@@ -1,12 +1,9 @@
 #![windows_subsystem = "windows"]
 
-use ct_lib::bitmap::*;
-use ct_lib::draw::*;
-use ct_lib::font;
-use ct_lib::font::BitmapFont;
-use ct_lib::math::*;
-use ct_lib::system;
-use ct_lib::system::PathHelper;
+use cottontail::core::PathHelper;
+use cottontail::core::*;
+use cottontail::image::{bitmap::*, color::hsl, font::*};
+use cottontail::math::*;
 
 use gif::SetParameter;
 use indexmap::IndexMap;
@@ -37,7 +34,7 @@ struct ColorInfo {
 
 fn get_executable_dir() -> String {
     if let Some(executable_path) = std::env::current_exe().ok() {
-        system::path_without_filename(executable_path.to_string_borrowed())
+        path_without_filename(executable_path.to_string_borrowed_or_panic())
     } else {
         ".".to_owned()
     }
@@ -51,12 +48,12 @@ fn get_executable_dir() -> String {
 /// This returns:
 /// "C:\bin\example_image_centered"
 fn get_image_output_dir(image_filepath: &str, output_dir_suffix: &str) -> String {
-    let image_filename = system::path_to_filename_without_extension(image_filepath);
+    let image_filename = path_to_filename_without_extension(image_filepath);
     let output_dir_root = get_executable_dir();
     if output_dir_suffix.is_empty() {
-        system::path_join(&output_dir_root, &image_filename)
+        path_join(&output_dir_root, &image_filename)
     } else {
-        system::path_join(
+        path_join(
             &output_dir_root,
             &(image_filename + "_" + output_dir_suffix),
         )
@@ -67,7 +64,7 @@ fn get_image_output_dir(image_filepath: &str, output_dir_suffix: &str) -> String
 #[cfg(debug_assertions)]
 fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
     let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
-    if !system::path_exists(&output_dir) {
+    if !path_exists(&output_dir) {
         std::fs::create_dir_all(&output_dir)
             .expect(&format!("Cannot create directory '{}'", &output_dir));
     }
@@ -76,7 +73,7 @@ fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
 #[cfg(not(debug_assertions))]
 fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
     let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
-    if system::path_exists(&output_dir) {
+    if path_exists(&output_dir) {
         std::fs::remove_dir_all(&output_dir).expect(&format!(
             "Cannot overwrite directory '{}': is a file from it still open?",
             &output_dir
@@ -88,8 +85,8 @@ fn create_image_output_dir(image_filepath: &str, output_dir_suffix: &str) {
 
 fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> String {
     let output_dir = get_image_output_dir(image_filepath, output_dir_suffix);
-    let image_filename = system::path_to_filename_without_extension(image_filepath);
-    system::path_join(&output_dir, &image_filename)
+    let image_filename = path_to_filename_without_extension(image_filepath);
+    path_join(&output_dir, &image_filename)
 }
 
 // NOTE: THIS IS FOR INTERNAL TESTING
@@ -123,20 +120,20 @@ fn get_image_filepaths_from_commandline() -> Vec<String> {
 
 pub fn load_fonts() -> (BitmapFont, BitmapFont) {
     let mut font_regular = BitmapFont::new(
-        font::FONT_DEFAULT_TINY_NAME,
-        font::FONT_DEFAULT_TINY_TTF,
-        font::FONT_DEFAULT_TINY_PIXEL_HEIGHT,
-        font::FONT_DEFAULT_TINY_RASTER_OFFSET,
+        FONT_DEFAULT_TINY_NAME,
+        FONT_DEFAULT_TINY_TTF,
+        FONT_DEFAULT_TINY_PIXEL_HEIGHT,
+        FONT_DEFAULT_TINY_RASTER_OFFSET,
         0,
         0,
         PixelRGBA::black(),
         PixelRGBA::transparent(),
     );
     let mut font_big = BitmapFont::new(
-        font::FONT_DEFAULT_REGULAR_NAME,
-        font::FONT_DEFAULT_REGULAR_TTF,
-        2 * font::FONT_DEFAULT_REGULAR_PIXEL_HEIGHT,
-        font::FONT_DEFAULT_REGULAR_RASTER_OFFSET,
+        FONT_DEFAULT_REGULAR_NAME,
+        FONT_DEFAULT_REGULAR_TTF,
+        2 * FONT_DEFAULT_REGULAR_PIXEL_HEIGHT,
+        FONT_DEFAULT_REGULAR_RASTER_OFFSET,
         0,
         0,
         PixelRGBA::black(),
@@ -159,9 +156,9 @@ pub fn load_fonts() -> (BitmapFont, BitmapFont) {
 fn collect_symbols() -> Vec<Bitmap> {
     let executable_dir = get_executable_dir();
     let symbols_dir = {
-        let candidate = system::path_join(&executable_dir, "resources");
+        let candidate = path_join(&executable_dir, "resources");
 
-        if system::path_exists(&candidate) {
+        if path_exists(&candidate) {
             candidate
         } else {
             // There was no symbols dir in the executable dir. Lets try our current workingdir
@@ -170,15 +167,15 @@ fn collect_symbols() -> Vec<Bitmap> {
     };
 
     assert!(
-        system::path_exists(&symbols_dir),
+        path_exists(&symbols_dir),
         "Missing `resources` path in '{}'",
         executable_dir
     );
 
     let mut symbols = Vec::new();
-    let symbols_filepaths = system::collect_files_by_extension_recursive(&symbols_dir, ".png");
+    let symbols_filepaths = collect_files_by_extension_recursive(&symbols_dir, ".png");
     for symbol_filepath in &symbols_filepaths {
-        let symbol_bitmap = Bitmap::create_from_png_file(symbol_filepath);
+        let symbol_bitmap = Bitmap::from_png_file_or_panic(symbol_filepath);
         symbols.push(symbol_bitmap);
     }
     symbols
@@ -210,10 +207,10 @@ fn create_alphanumeric_symbols(font: &BitmapFont) -> Vec<Bitmap> {
 }
 
 fn open_image(image_filepath: &str) -> Bitmap {
-    if system::path_to_extension(&image_filepath).ends_with("gif") {
+    if path_to_extension(&image_filepath).ends_with("gif") {
         bitmap_create_from_gif_file(&image_filepath)
-    } else if system::path_to_extension(&image_filepath).ends_with("png") {
-        Bitmap::create_from_png_file(&image_filepath)
+    } else if path_to_extension(&image_filepath).ends_with("png") {
+        Bitmap::from_png_file_or_panic(&image_filepath)
     } else {
         panic!("We only support GIF or PNG images");
     }
@@ -254,6 +251,7 @@ fn bitmap_create_from_gif_file(image_filepath: &str) -> Bitmap {
     let mut decoder = gif::Decoder::new(
         File::open(image_filepath).expect(&format!("Cannot open file '{}'", image_filepath)),
     );
+
     decoder.set(gif::ColorOutput::RGBA);
     let mut decoder = decoder
         .read_info()
@@ -364,25 +362,31 @@ fn place_grid_labels_in_pattern(
         let draw_pos_top = Vec2i::new(draw_x, label_padding / 2);
         let draw_pos_bottom = Vec2i::new(draw_x, result_bitmap.height - label_padding / 2);
 
-        result_bitmap.draw_text_aligned_in_point_exact(
+        result_bitmap.draw_text_aligned_in_point(
             font,
             &text,
             1,
             draw_pos_top,
             Vec2i::zero(),
-            false,
-            AlignmentHorizontal::Center,
-            AlignmentVertical::Center,
+            Some(TextAlignment {
+                horizontal: AlignmentHorizontal::Center,
+                vertical: AlignmentVertical::Center,
+                origin_is_baseline: false,
+                ignore_whitespace: false,
+            }),
         );
-        result_bitmap.draw_text_aligned_in_point_exact(
+        result_bitmap.draw_text_aligned_in_point(
             font,
             &text,
             1,
             draw_pos_bottom,
             Vec2i::zero(),
-            false,
-            AlignmentHorizontal::Center,
-            AlignmentVertical::Center,
+            Some(TextAlignment {
+                horizontal: AlignmentHorizontal::Center,
+                vertical: AlignmentVertical::Center,
+                origin_is_baseline: false,
+                ignore_whitespace: false,
+            }),
         );
     }
 
@@ -424,25 +428,31 @@ fn place_grid_labels_in_pattern(
         let draw_pos_left = Vec2i::new(label_padding / 2, draw_y);
         let draw_pos_right = Vec2i::new(result_bitmap.width - label_padding / 2, draw_y);
 
-        result_bitmap.draw_text_aligned_in_point_exact(
+        result_bitmap.draw_text_aligned_in_point(
             font,
             &text,
             1,
             draw_pos_left,
             Vec2i::zero(),
-            false,
-            AlignmentHorizontal::Center,
-            AlignmentVertical::Center,
+            Some(TextAlignment {
+                horizontal: AlignmentHorizontal::Center,
+                vertical: AlignmentVertical::Center,
+                origin_is_baseline: false,
+                ignore_whitespace: false,
+            }),
         );
-        result_bitmap.draw_text_aligned_in_point_exact(
+        result_bitmap.draw_text_aligned_in_point(
             font,
             &text,
             1,
             draw_pos_right,
             Vec2i::zero(),
-            false,
-            AlignmentHorizontal::Center,
-            AlignmentVertical::Center,
+            Some(TextAlignment {
+                horizontal: AlignmentHorizontal::Center,
+                vertical: AlignmentVertical::Center,
+                origin_is_baseline: false,
+                ignore_whitespace: false,
+            }),
         );
     }
 
@@ -784,7 +794,7 @@ fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorI
         let entry = color_mappings.entry(*pixel).or_insert_with(|| ColorInfo {
             color: *pixel,
             count: 0,
-            symbol: Bitmap::empty(),
+            symbol: Bitmap::new_empty(),
         });
         entry.count += 1;
     }
@@ -894,8 +904,8 @@ fn create_patterns_dir_centered(
     color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let output_dir_suffix = "centered";
-    let image_center_x = math::make_even_upwards(image.width) / 2;
-    let image_center_y = math::make_even_upwards(image.height) / 2;
+    let image_center_x = make_even_upwards(image.width) / 2;
+    let image_center_y = make_even_upwards(image.height) / 2;
 
     let (segment_images, segment_coordinates) =
         image.to_segments(SPLIT_SEGMENT_WIDTH, SPLIT_SEGMENT_HEIGHT);
@@ -979,7 +989,7 @@ fn create_pattern_page_layout(font: &BitmapFont, layout_indices: &[Vec2i]) -> Bi
     let page_tile_dim = {
         // NOTE: We want to have a 1px visual gap between page tiles therefore we add 1
         let page_tile_width = 1 + font
-            .get_text_bounding_rect(&format!(" {} ", page_count), 1)
+            .get_text_bounding_rect(&format!(" {} ", page_count), 1, false)
             .dim
             .x;
         let page_tile_height = 1 + (page_tile_width as f32 * (9.0 / 6.0)) as i32;
@@ -1004,9 +1014,12 @@ fn create_pattern_page_layout(font: &BitmapFont, layout_indices: &[Vec2i]) -> Bi
             1,
             pos + page_tile_dim / 2,
             Vec2i::zero(),
-            false,
-            AlignmentHorizontal::Center,
-            AlignmentVertical::Center,
+            Some(TextAlignment {
+                horizontal: AlignmentHorizontal::Center,
+                vertical: AlignmentVertical::Center,
+                origin_is_baseline: false,
+                ignore_whitespace: false,
+            }),
         );
     }
 
@@ -1197,7 +1210,7 @@ fn show_messagebox(caption: &str, message: &str, is_error: bool) {
 
 fn set_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
-        let (message, location) = ct_lib::panic_message_split_to_message_and_location(panic_info);
+        let (message, location) = panic_message_split_to_message_and_location(panic_info);
         let final_message = format!("{}\n\nError occured at: {}", message, location);
 
         show_messagebox("Pixel Stitch Error", &final_message, true);
@@ -1314,7 +1327,7 @@ fn test_symbols_contrast() {
         }
 
         // NOTE: sqrt(luminace_steps * hue_steps * saturation_steps) = sqrt(32 * 32 * 16) = 128
-        let mut result = Bitmap::empty();
+        let mut result = Bitmap::new_empty();
         result.width = 128;
         result.height = 128;
         result.data = colors;
@@ -1368,7 +1381,7 @@ fn test_color_sorting() {
         }
 
         // NOTE: sqrt(red_steps * green_steps * blue_steps) = sqrt(64 * 64 * 64) = 512
-        let mut result = Bitmap::empty();
+        let mut result = Bitmap::new_empty();
         result.width = 512;
         result.height = 512;
         result.data = colors;
