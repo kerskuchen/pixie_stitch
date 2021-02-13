@@ -22,11 +22,26 @@ const SPLIT_SEGMENT_HEIGHT: i32 = 80;
 const COLOR_GRID_THIN: PixelRGBA = PixelRGBA::new(128, 128, 128, 255);
 const COLOR_GRID_THICK: PixelRGBA = PixelRGBA::new(64, 64, 64, 255);
 
+enum PatternType {
+    BlackAndWhite,
+    Colorized,
+    ColorizedNoSymbols,
+    PaintByNumbers,
+}
+
+struct Resources {
+    font: BitmapFont,
+    font_big: BitmapFont,
+    stitch_background_image: Bitmap,
+}
+
 #[derive(Clone)]
 struct ColorInfo {
     pub color: PixelRGBA,
     pub count: usize,
     pub symbol: Bitmap,
+    pub symbol_alphanum: Bitmap,
+    pub stitch_premultiplied: Bitmap,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,9 +109,11 @@ fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> S
 fn get_image_filepaths_from_commandline() -> Vec<String> {
     // vec!["examples/nathan.png".to_owned()]
     // vec!["examples/nathan_big.gif".to_owned()]
+    // vec!["examples/pixie.png".to_owned()]
     vec![
         "examples/nathan.png".to_owned(),
         "examples/nathan_big.gif".to_owned(),
+        "examples/pixie.png".to_owned(),
     ]
 }
 
@@ -117,6 +134,45 @@ fn get_image_filepaths_from_commandline() -> Vec<String> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Loading resources
+
+fn get_resource_dir_path() -> String {
+    let executable_dir_path = get_executable_dir();
+    let resource_dir_path = {
+        let candidate = path_join(&executable_dir_path, "resources");
+
+        if path_exists(&candidate) {
+            candidate
+        } else {
+            // There was no symbols dir in the executable dir. Lets try our current workingdir
+            "resources".to_owned()
+        }
+    };
+
+    assert!(
+        path_exists(&resource_dir_path),
+        "Missing `resources` path in '{}'",
+        executable_dir_path
+    );
+
+    resource_dir_path
+}
+
+fn load_stitch_preview_images() -> (
+    cottontail::image::Grid<PixelRGBA>,
+    cottontail::image::Grid<PixelRGBA>,
+) {
+    let resource_dir_path = get_resource_dir_path();
+    let background_tile_image =
+        Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, "aida.png"));
+    let stitch_tile_image =
+        Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, "stitch.png"));
+
+    assert!(!stitch_tile_image.is_empty());
+    assert!(!background_tile_image.is_empty());
+    assert!(stitch_tile_image.width == background_tile_image.width);
+    assert!(stitch_tile_image.height == background_tile_image.height);
+    (stitch_tile_image, background_tile_image)
+}
 
 pub fn load_fonts() -> (BitmapFont, BitmapFont) {
     let mut font_regular = BitmapFont::new(
@@ -154,31 +210,12 @@ pub fn load_fonts() -> (BitmapFont, BitmapFont) {
 }
 
 fn collect_symbols() -> Vec<Bitmap> {
-    let executable_dir = get_executable_dir();
-    let symbols_dir = {
-        let candidate = path_join(&executable_dir, "resources");
-
-        if path_exists(&candidate) {
-            candidate
-        } else {
-            // There was no symbols dir in the executable dir. Lets try our current workingdir
-            "resources".to_owned()
-        }
-    };
-
-    assert!(
-        path_exists(&symbols_dir),
-        "Missing `resources` path in '{}'",
-        executable_dir
-    );
-
-    let mut symbols = Vec::new();
-    let symbols_filepaths = collect_files_by_extension_recursive(&symbols_dir, ".png");
-    for symbol_filepath in &symbols_filepaths {
-        let symbol_bitmap = Bitmap::from_png_file_or_panic(symbol_filepath);
-        symbols.push(symbol_bitmap);
-    }
-    symbols
+    let resource_dir_path = get_resource_dir_path();
+    let symbols_filepaths = collect_files_by_extension_recursive(&resource_dir_path, ".png");
+    symbols_filepaths
+        .into_iter()
+        .map(|symbol_filepath| Bitmap::from_png_file_or_panic(&symbol_filepath))
+        .collect()
 }
 
 fn create_alphanumeric_symbols(font: &BitmapFont) -> Vec<Bitmap> {
@@ -470,12 +507,18 @@ fn create_cross_stitch_pattern(
     segment_index: Option<usize>,
     logical_first_coordinate_x: i32,
     logical_first_coordinate_y: i32,
-    colorize: bool,
-    add_symbol: bool,
+    pattern_type: PatternType,
     add_thick_ten_grid: bool,
     add_origin_grid_bars: bool,
     symbol_mask_color: PixelRGBA,
 ) {
+    let (colorize, add_symbol, use_alphanum) = match pattern_type {
+        PatternType::BlackAndWhite => (false, true, false),
+        PatternType::Colorized => (true, true, false),
+        PatternType::ColorizedNoSymbols => (true, false, false),
+        PatternType::PaintByNumbers => (false, true, true),
+    };
+
     let mut scaled_bitmap = Bitmap::new(
         (TILE_SIZE * bitmap.width) as u32,
         (TILE_SIZE * bitmap.height) as u32,
@@ -512,7 +555,12 @@ fn create_cross_stitch_pattern(
 
             // Add symbol
             if add_symbol && color.a != 0 {
-                let symbol = &color_mappings.get(&color).unwrap().symbol;
+                let symbol = if use_alphanum {
+                    &color_mappings.get(&color).unwrap().symbol_alphanum
+                } else {
+                    &color_mappings.get(&color).unwrap().symbol
+                };
+
                 blit_symbol(
                     symbol,
                     &mut scaled_bitmap,
@@ -691,7 +739,6 @@ fn create_cross_stitch_pattern_set(
     output_filename_suffix: &str,
     output_dir_suffix: &str,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
-    color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
     segment_index: Option<usize>,
     logical_first_coordinate_x: i32,
     logical_first_coordinate_y: i32,
@@ -711,8 +758,7 @@ fn create_cross_stitch_pattern_set(
                 segment_index,
                 logical_first_coordinate_x,
                 logical_first_coordinate_y,
-                true,
-                true,
+                PatternType::Colorized,
                 true,
                 add_origin_grid_bars,
                 PixelRGBA::white(),
@@ -730,8 +776,7 @@ fn create_cross_stitch_pattern_set(
                 segment_index,
                 logical_first_coordinate_x,
                 logical_first_coordinate_y,
-                false,
-                true,
+                PatternType::BlackAndWhite,
                 true,
                 add_origin_grid_bars,
                 PixelRGBA::white(),
@@ -749,8 +794,7 @@ fn create_cross_stitch_pattern_set(
                 segment_index,
                 logical_first_coordinate_x,
                 logical_first_coordinate_y,
-                true,
-                false,
+                PatternType::ColorizedNoSymbols,
                 true,
                 add_origin_grid_bars,
                 PixelRGBA::white(),
@@ -765,12 +809,11 @@ fn create_cross_stitch_pattern_set(
                     &image_filepath,
                     &("paint_by_numbers_".to_owned() + output_filename_suffix),
                     output_dir_suffix,
-                    &color_mappings_alphanum,
+                    &color_mappings,
                     segment_index,
                     logical_first_coordinate_x,
                     logical_first_coordinate_y,
-                    false,
-                    true,
+                    PatternType::PaintByNumbers,
                     false,
                     false,
                     PixelRGBA::transparent(),
@@ -782,6 +825,55 @@ fn create_cross_stitch_pattern_set(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Image analysis
+
+fn create_color_mappings_from_image(
+    image: &Bitmap,
+    image_filepath: &str,
+    symbols: &[Bitmap],
+    symbols_alphanum: &[Bitmap],
+    stitch_image: &Bitmap,
+) -> IndexMap<PixelRGBA, ColorInfo> {
+    let mut color_mappings = image_extract_colors_and_counts(&image);
+
+    // Stitch symbols
+    assert!(
+        symbols.len() >= color_mappings.len(),
+        "Not enough symbols to map {} colors found in given image '{}' for cross stitch",
+        color_mappings.len(),
+        &image_filepath,
+    );
+    for (entry, symbol) in color_mappings.values_mut().zip(symbols.iter()) {
+        entry.symbol = symbol.clone();
+    }
+
+    // Alphanum symbols
+    assert!(
+        symbols_alphanum.len() >= color_mappings.len(),
+        "Not enough symbols to map {} colors found in given image '{}' for paint by numbers",
+        color_mappings.len(),
+        &image_filepath,
+    );
+    for (entry, symbol_alphanum) in color_mappings.values_mut().zip(symbols_alphanum.iter()) {
+        entry.symbol_alphanum = symbol_alphanum.clone();
+    }
+
+    // Colorized stitch tiles
+    for entry in color_mappings.values_mut() {
+        // Add stitch
+        let color = entry.color;
+        if color.a != 0 {
+            let mut stitch = stitch_image.to_premultiplied_alpha();
+            for pixel in stitch.data.iter_mut() {
+                pixel.r = ((pixel.r as f32) * (color.r as f32 / 255.0)) as u8;
+                pixel.g = ((pixel.g as f32) * (color.g as f32 / 255.0)) as u8;
+                pixel.b = ((pixel.b as f32) * (color.b as f32 / 255.0)) as u8;
+            }
+            entry.stitch_premultiplied = stitch.clone();
+        }
+    }
+
+    color_mappings
+}
 
 fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorInfo> {
     let mut color_mappings = IndexMap::new();
@@ -795,6 +887,8 @@ fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorI
             color: *pixel,
             count: 0,
             symbol: Bitmap::new_empty(),
+            symbol_alphanum: Bitmap::new_empty(),
+            stitch_premultiplied: Bitmap::new_empty(),
         });
         entry.count += 1;
     }
@@ -807,26 +901,14 @@ fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorI
     color_mappings
 }
 
-fn image_map_colors_to_symbols(
-    color_mappings: &mut IndexMap<PixelRGBA, ColorInfo>,
-    symbols: &[Bitmap],
-) {
-    assert!(color_mappings.len() <= symbols.len());
-    for (entry, symbol) in color_mappings.values_mut().zip(symbols.iter()) {
-        entry.symbol = symbol.clone();
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Pattern dir creation
 
 fn create_patterns_dir(
     image: &Bitmap,
     image_filepath: &str,
-    font: &BitmapFont,
-    font_big: &BitmapFont,
+    resources: &Resources,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
-    color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let output_dir_suffix = "";
 
@@ -841,7 +923,7 @@ fn create_patterns_dir(
                 &color_mappings,
                 &image_filepath,
                 output_dir_suffix,
-                &font,
+                &resources.font,
                 &segment_coordinates,
             );
         });
@@ -850,13 +932,12 @@ fn create_patterns_dir(
         scope.spawn(|_| {
             create_cross_stitch_pattern_set(
                 &image,
-                &font,
-                &font_big,
+                &resources.font,
+                &resources.font_big,
                 &image_filepath,
                 "complete",
                 output_dir_suffix,
                 &color_mappings,
-                &color_mappings_alphanum,
                 None,
                 0,
                 0,
@@ -877,13 +958,12 @@ fn create_patterns_dir(
 
                     create_cross_stitch_pattern_set(
                         segment_image,
-                        &font,
-                        &font_big,
+                        &resources.font,
+                        &resources.font_big,
                         &image_filepath,
                         &format!("segment_{}", segment_index + 1),
                         output_dir_suffix,
                         &color_mappings,
-                        &color_mappings_alphanum,
                         Some(segment_index + 1),
                         label_start_x,
                         label_start_y,
@@ -898,10 +978,8 @@ fn create_patterns_dir(
 fn create_patterns_dir_centered(
     image: &Bitmap,
     image_filepath: &str,
-    font: &BitmapFont,
-    font_big: &BitmapFont,
+    resources: &Resources,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
-    color_mappings_alphanum: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let output_dir_suffix = "centered";
     let image_center_x = make_even_upwards(image.width) / 2;
@@ -918,7 +996,7 @@ fn create_patterns_dir_centered(
                 &color_mappings,
                 &image_filepath,
                 output_dir_suffix,
-                &font,
+                &resources.font,
                 &segment_coordinates,
             );
         });
@@ -927,13 +1005,12 @@ fn create_patterns_dir_centered(
         scope.spawn(|_| {
             create_cross_stitch_pattern_set(
                 &image,
-                &font,
-                &font_big,
+                &resources.font,
+                &resources.font_big,
                 &image_filepath,
                 "complete",
                 output_dir_suffix,
                 &color_mappings,
-                &color_mappings_alphanum,
                 None,
                 -image_center_x,
                 -image_center_y,
@@ -956,13 +1033,12 @@ fn create_patterns_dir_centered(
 
                     create_cross_stitch_pattern_set(
                         segment_image,
-                        &font,
-                        &font_big,
+                        &resources.font,
+                        &resources.font_big,
                         &image_filepath,
                         &format!("segment_{}", segment_index + 1),
                         output_dir_suffix,
                         &color_mappings,
-                        &color_mappings_alphanum,
                         Some(segment_index + 1),
                         logical_first_coordinate_x,
                         logical_first_coordinate_y,
@@ -971,6 +1047,75 @@ fn create_patterns_dir_centered(
                     );
                 });
         }
+    });
+}
+
+fn create_cross_stitch_pattern_preview(
+    bitmap: &Bitmap,
+    image_filepath: &str,
+    output_filename_suffix: &str,
+    output_dir_suffix: &str,
+    resources: &Resources,
+    color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
+) {
+    let mut scaled_bitmap = Bitmap::new(
+        (resources.stitch_background_image.width * bitmap.width) as u32,
+        (resources.stitch_background_image.height * bitmap.height) as u32,
+    );
+
+    for y in 0..bitmap.height {
+        for x in 0..bitmap.width {
+            let color = bitmap.get(x, y);
+
+            let pos = Vec2i::new(
+                resources.stitch_background_image.width * x,
+                resources.stitch_background_image.height * y,
+            );
+            resources
+                .stitch_background_image
+                .blit_to(&mut scaled_bitmap, pos, false);
+
+            // Add stitch
+            if color.a != 0 {
+                let stitch = &color_mappings.get(&color).unwrap().stitch_premultiplied;
+                stitch.premultiplied_blit_to_alpha_blended(
+                    &mut scaled_bitmap,
+                    pos,
+                    false,
+                    AlphaBlendMode::Normal,
+                );
+            }
+        }
+    }
+
+    // Write out png image
+    let output_filepath = get_image_output_filepath(&image_filepath, output_dir_suffix)
+        + "_"
+        + output_filename_suffix
+        + ".png";
+    Bitmap::write_to_png_file(&scaled_bitmap, &output_filepath);
+}
+
+fn create_preview_dir(
+    image: &Bitmap,
+    image_filepath: &str,
+    resources: &Resources,
+    color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
+) {
+    let output_dir_suffix = "preview";
+
+    rayon::scope(|scope| {
+        // Create stitched preview
+        scope.spawn(|_| {
+            create_cross_stitch_pattern_preview(
+                &image,
+                &image_filepath,
+                "complete",
+                output_dir_suffix,
+                resources,
+                &color_mappings,
+            );
+        });
     });
 }
 
@@ -1097,7 +1242,7 @@ fn create_cross_stitch_legend(
                 .fold(0, |acc, entry| acc + entry.count);
 
             Bitmap::create_from_text(
-                font,
+                &font,
                 &format!(
                     "Size:     {}x{}\n\nColors:   {}\n\nStitches: {}\n\n\n",
                     image_dimensions.x, image_dimensions.y, color_count, stitch_count
@@ -1112,7 +1257,7 @@ fn create_cross_stitch_legend(
             let color_infos: Vec<ColorInfo> = color_mappings.values().cloned().collect();
             let block_bitmaps: Vec<Bitmap> = color_infos
                 .chunks(LEGEND_BLOCK_ENTRY_COUNT)
-                .map(|chunk| create_legend_block(font, chunk))
+                .map(|chunk| create_legend_block(&font, chunk))
                 .collect();
             let num_columns = block_bitmaps.len().max(4);
             let block_rows: Vec<Bitmap> = block_bitmaps
@@ -1146,7 +1291,7 @@ fn create_cross_stitch_legend(
 
     // Add page layout order if necessary
     if segment_layout_indices.len() > 1 {
-        let page_layout_image = create_pattern_page_layout(font, segment_layout_indices);
+        let page_layout_image = create_pattern_page_layout(&font, segment_layout_indices);
 
         legend = legend.glued_to(
             &page_layout_image,
@@ -1230,6 +1375,12 @@ fn main() {
     let (font, font_big) = load_fonts();
     let symbols = collect_symbols();
     let symbols_alphanum = create_alphanumeric_symbols(&font);
+    let (stitch_image, stitch_background_image) = load_stitch_preview_images();
+    let resources = Resources {
+        font,
+        font_big,
+        stitch_background_image,
+    };
 
     // NOTE: We can uncomment this if we want to test with more colors than we have symbols
     /*
@@ -1245,48 +1396,26 @@ fn main() {
     for image_filepath in get_image_filepaths_from_commandline() {
         create_image_output_dir(&image_filepath, "");
         create_image_output_dir(&image_filepath, "centered");
+        create_image_output_dir(&image_filepath, "preview");
 
         let image = open_image(&image_filepath);
-
-        let mut color_mappings = image_extract_colors_and_counts(&image);
-        let mut color_mappings_alphanum = color_mappings.clone();
-
-        assert!(
-            symbols.len() >= color_mappings.len(),
-            "Not enough symbols to map {} colors found in given image '{}' for cross stitch",
-            color_mappings.len(),
+        let color_mappings = create_color_mappings_from_image(
+            &image,
             &image_filepath,
+            &symbols,
+            &symbols_alphanum,
+            &stitch_image,
         );
-        assert!(
-            symbols_alphanum.len() >= color_mappings_alphanum.len(),
-            "Not enough symbols to map {} colors found in given image '{}' for paint by numbers",
-            color_mappings.len(),
-            &image_filepath,
-        );
-
-        image_map_colors_to_symbols(&mut color_mappings, &symbols);
-        image_map_colors_to_symbols(&mut color_mappings_alphanum, &symbols_alphanum);
 
         rayon::scope(|scope| {
             scope.spawn(|_| {
-                create_patterns_dir(
-                    &image,
-                    &image_filepath,
-                    &font,
-                    &font_big,
-                    &color_mappings,
-                    &color_mappings_alphanum,
-                );
+                create_patterns_dir(&image, &image_filepath, &resources, &color_mappings);
             });
             scope.spawn(|_| {
-                create_patterns_dir_centered(
-                    &image,
-                    &image_filepath,
-                    &font,
-                    &font_big,
-                    &color_mappings,
-                    &color_mappings_alphanum,
-                );
+                create_patterns_dir_centered(&image, &image_filepath, &resources, &color_mappings);
+            });
+            scope.spawn(|_| {
+                create_preview_dir(&image, &image_filepath, &resources, &color_mappings);
             });
         });
     }
@@ -1338,14 +1467,14 @@ fn test_symbols_contrast() {
     let image = create_test_color_ramp_bitmap();
     Bitmap::write_to_png_file(&image, "test_symbol_contrast.png");
 
-    let mut color_mappings = image_extract_colors_and_counts(&image);
     let mut symbols = collect_symbols();
-
-    while symbols.len() < color_mappings.len() {
+    while symbols.len() < 128 * 128 {
         symbols = [&symbols[..], &symbols[..]].concat()
     }
 
-    image_map_colors_to_symbols(&mut color_mappings, &mut symbols);
+    let color_mappings =
+        create_color_mappings_from_image(&image, "", &symbols, &vec![], &Bitmap::new_empty());
+
     create_cross_stitch_pattern(
         &image,
         &font,
@@ -1357,8 +1486,7 @@ fn test_symbols_contrast() {
         None,
         0,
         0,
-        true,
-        true,
+        PatternType::Colorized,
         true,
         true,
         PixelRGBA::white(),
