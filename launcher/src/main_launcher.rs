@@ -208,6 +208,11 @@ fn collect_symbols() -> Vec<Bitmap> {
     let symbols_filepaths = collect_files_by_extension_recursive(&resource_dir_path, ".png");
     symbols_filepaths
         .into_iter()
+        .filter(|filepath| {
+            path_to_filename_without_extension(filepath)
+                .parse::<u32>()
+                .is_ok()
+        })
         .map(|symbol_filepath| Bitmap::from_png_file_or_panic(&symbol_filepath))
         .collect()
 }
@@ -1053,6 +1058,7 @@ fn create_cross_stitch_pattern_preview(
     resources: &Resources,
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
+    let bitmap = bitmap.extended(10, 10, 10, 10, PixelRGBA::transparent());
     let tile_width = resources.stitch_background_image_8x8.width / 8;
     let tile_height = resources.stitch_background_image_8x8.height / 8;
 
@@ -1060,8 +1066,8 @@ fn create_cross_stitch_pattern_preview(
         (tile_width * bitmap.width) as u32,
         (tile_height * bitmap.height) as u32,
     );
-    for y in 0..bitmap.height / 8 {
-        for x in 0..bitmap.width / 8 {
+    for y in 0..=bitmap.height / 8 {
+        for x in 0..=bitmap.width / 8 {
             let pos = Vec2i::new(
                 resources.stitch_background_image_8x8.width * x,
                 resources.stitch_background_image_8x8.height * y,
@@ -1387,7 +1393,7 @@ fn main() {
     let resources = Resources {
         font,
         font_big,
-        stitch_background_image_8x8: stitch_background_image_8x8,
+        stitch_background_image_8x8,
     };
 
     // NOTE: We can uncomment this if we want to test with more colors than we have symbols
@@ -1428,6 +1434,7 @@ fn main() {
         });
     }
 
+    #[cfg(not(debug_assertions))]
     show_messagebox("Pixel Stitch", "Finished creating patterns. Enjoy!", false);
 }
 
