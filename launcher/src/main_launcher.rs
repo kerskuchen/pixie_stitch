@@ -1,9 +1,9 @@
 #![windows_subsystem = "windows"]
 
-use cottontail::core::PathHelper;
-use cottontail::core::*;
 use cottontail::image::{bitmap::*, color::hsl, font::*};
 use cottontail::math::*;
+use cottontail::{core::PathHelper, image::ColorBlendMode};
+use cottontail::{core::*, draw::screen_point_to_canvas_point};
 
 use gif::SetParameter;
 use indexmap::IndexMap;
@@ -32,7 +32,7 @@ enum PatternType {
 struct Resources {
     font: BitmapFont,
     font_big: BitmapFont,
-    stitch_background_image_8x8: Bitmap,
+    stitch_background_image_8x8_premultiplied_alpha: Bitmap,
 }
 
 #[derive(Clone)]
@@ -41,7 +41,7 @@ struct ColorInfo {
     pub count: usize,
     pub symbol: Bitmap,
     pub symbol_alphanum: Bitmap,
-    pub stitch_premultiplied: Vec<Bitmap>,
+    pub stitches_premultiplied: Vec<Bitmap>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -157,15 +157,30 @@ fn get_resource_dir_path() -> String {
     resource_dir_path
 }
 
-fn load_stitch_preview_images() -> (Vec<Bitmap>, Bitmap) {
+fn load_stitch_preview_images_premultiplied_alpha() -> (Vec<Bitmap>, Vec<Bitmap>, Bitmap) {
     let resource_dir_path = get_resource_dir_path();
     let background_tile_image_8x8 =
-        Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, "aida_8x8.png"));
+        Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, "aida_8x8.png"))
+            .to_premultiplied_alpha();
     let stitch_tile_images = ["stitch1.png", "stitch2.png", "stitch3.png"]
         .iter()
-        .map(|filename| Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, filename)))
+        .map(|filename| {
+            Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, filename))
+                .to_premultiplied_alpha()
+        })
         .collect();
-    (stitch_tile_images, background_tile_image_8x8)
+    let stitch_tile_images_luminance = ["stitch1_lum.png", "stitch2_lum.png", "stitch3_lum.png"]
+        .iter()
+        .map(|filename| {
+            Bitmap::from_png_file_or_panic(&path_join(&resource_dir_path, filename))
+                .to_premultiplied_alpha()
+        })
+        .collect();
+    (
+        stitch_tile_images,
+        stitch_tile_images_luminance,
+        background_tile_image_8x8,
+    )
 }
 
 pub fn load_fonts() -> (BitmapFont, BitmapFont) {
@@ -830,7 +845,8 @@ fn create_color_mappings_from_image(
     image_filepath: &str,
     symbols: &[Bitmap],
     symbols_alphanum: &[Bitmap],
-    stitch_images: &[Bitmap],
+    stitch_images_premultiplied_alpha: &[Bitmap],
+    stitch_images_luminance_premultiplied_alpha: &[Bitmap],
 ) -> IndexMap<PixelRGBA, ColorInfo> {
     let mut color_mappings = image_extract_colors_and_counts(&image);
 
@@ -860,14 +876,82 @@ fn create_color_mappings_from_image(
     for entry in color_mappings.values_mut() {
         let color = entry.color;
         if color.a != 0 {
-            for stitch_image in stitch_images.iter() {
-                let mut stitch = stitch_image.to_premultiplied_alpha();
-                for pixel in stitch.data.iter_mut() {
-                    pixel.r = ((pixel.r as f32) * (color.r as f32 / 255.0)) as u8;
-                    pixel.g = ((pixel.g as f32) * (color.g as f32 / 255.0)) as u8;
-                    pixel.b = ((pixel.b as f32) * (color.b as f32 / 255.0)) as u8;
+            for (stitch_image_premultipllied, stitch_image_luminance_premultiplied) in
+                stitch_images_premultiplied_alpha
+                    .iter()
+                    .zip(stitch_images_luminance_premultiplied_alpha.iter())
+            {
+                let mut stitch = stitch_image_premultipllied.clone();
+                // stitch
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/begin.png");
+
+                let screen_layer = Bitmap::new_filled(
+                    stitch_image_premultipllied.width as u32,
+                    stitch_image_premultipllied.height as u32,
+                    PixelRGBA::new(105, 109, 128, 255),
+                )
+                .to_premultiplied_alpha();
+                // screen_layer
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/screen.png");
+                screen_layer.blit_to_alpha_blended_premultiplied(
+                    &mut stitch,
+                    Vec2i::zero(),
+                    false,
+                    ColorBlendMode::Screen,
+                );
+                // stitch
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/stitch_after_screen.png");
+
+                let color_layer = Bitmap::new_filled(
+                    stitch_image_premultipllied.width as u32,
+                    stitch_image_premultipllied.height as u32,
+                    color,
+                )
+                .to_premultiplied_alpha();
+                // color_layer
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/color.png");
+                color_layer.blit_to_alpha_blended_premultiplied(
+                    &mut stitch,
+                    Vec2i::zero(),
+                    false,
+                    ColorBlendMode::Multiply,
+                );
+                // stitch
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/stitch_after_color.png");
+
+                let mut luminosity_layer = stitch_image_luminance_premultiplied.clone();
+                let percent = (color.r as f32 + color.g as f32 + color.b as f32) / (3.0 * 255.0);
+                for pixel in luminosity_layer.data.iter_mut() {
+                    pixel.r /= 3 + (4.0 * percent * percent) as u8;
+                    pixel.g /= 3 + (4.0 * percent * percent) as u8;
+                    pixel.b /= 3 + (4.0 * percent * percent) as u8;
+                    pixel.a /= 3 + (4.0 * percent * percent) as u8;
                 }
-                entry.stitch_premultiplied.push(stitch);
+                // luminosity_layer
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/luminosity.png");
+                luminosity_layer.blit_to_alpha_blended_premultiplied(
+                    &mut stitch,
+                    Vec2i::zero(),
+                    false,
+                    ColorBlendMode::Luminosity,
+                );
+                // stitch
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/stitch_after_luminosity.png");
+
+                stitch = stitch.masked_by_premultiplied_alpha(&stitch_image_premultipllied);
+                // stitch
+                //     .to_unpremultiplied_alpha()
+                //     .write_to_png_file("text/end.png");
+                entry
+                    .stitches_premultiplied
+                    .push(stitch.masked_by_premultiplied_alpha(&stitch_image_premultipllied));
             }
         }
     }
@@ -888,7 +972,7 @@ fn image_extract_colors_and_counts(image: &Bitmap) -> IndexMap<PixelRGBA, ColorI
             count: 0,
             symbol: Bitmap::new_empty(),
             symbol_alphanum: Bitmap::new_empty(),
-            stitch_premultiplied: Vec::new(),
+            stitches_premultiplied: Vec::new(),
         });
         entry.count += 1;
     }
@@ -1059,8 +1143,14 @@ fn create_cross_stitch_pattern_preview(
     color_mappings: &IndexMap<PixelRGBA, ColorInfo>,
 ) {
     let bitmap = bitmap.extended(10, 10, 10, 10, PixelRGBA::transparent());
-    let tile_width = resources.stitch_background_image_8x8.width / 8;
-    let tile_height = resources.stitch_background_image_8x8.height / 8;
+    let tile_width = resources
+        .stitch_background_image_8x8_premultiplied_alpha
+        .width
+        / 8;
+    let tile_height = resources
+        .stitch_background_image_8x8_premultiplied_alpha
+        .height
+        / 8;
 
     let mut scaled_bitmap = Bitmap::new(
         (tile_width * bitmap.width) as u32,
@@ -1069,11 +1159,17 @@ fn create_cross_stitch_pattern_preview(
     for y in 0..=bitmap.height / 8 {
         for x in 0..=bitmap.width / 8 {
             let pos = Vec2i::new(
-                resources.stitch_background_image_8x8.width * x,
-                resources.stitch_background_image_8x8.height * y,
+                resources
+                    .stitch_background_image_8x8_premultiplied_alpha
+                    .width
+                    * x,
+                resources
+                    .stitch_background_image_8x8_premultiplied_alpha
+                    .height
+                    * y,
             );
             resources
-                .stitch_background_image_8x8
+                .stitch_background_image_8x8_premultiplied_alpha
                 .blit_to(&mut scaled_bitmap, pos, true);
         }
     }
@@ -1087,16 +1183,16 @@ fn create_cross_stitch_pattern_preview(
             if color.a != 0 {
                 let tile_pos_center =
                     Vec2i::new(tile_width * x, tile_height * y) + (tile_width / 2);
-                let stitches = &color_mappings.get(&color).unwrap().stitch_premultiplied;
+                let stitches = &color_mappings.get(&color).unwrap().stitches_premultiplied;
                 let stitches_count = stitches.len();
                 let stitch =
                     &stitches[random.u32_bounded_exclusive(stitches_count as u32) as usize];
                 let stitch_center = Vec2i::new(stitch.width / 2, stitch.height / 2);
-                stitch.premultiplied_blit_to_alpha_blended(
+                stitch.blit_to_alpha_blended_premultiplied(
                     &mut scaled_bitmap,
                     tile_pos_center - stitch_center,
                     true,
-                    AlphaBlendMode::Normal,
+                    ColorBlendMode::Normal,
                 );
             }
         }
@@ -1389,11 +1485,15 @@ fn main() {
     let (font, font_big) = load_fonts();
     let symbols = collect_symbols();
     let symbols_alphanum = create_alphanumeric_symbols(&font);
-    let (stitch_images, stitch_background_image_8x8) = load_stitch_preview_images();
+    let (
+        stitch_images_premultiplied_alpha,
+        stitch_images_luminance_premultiplied_alpha,
+        stitch_background_image_8x8_premultiplied_alpha,
+    ) = load_stitch_preview_images_premultiplied_alpha();
     let resources = Resources {
         font,
         font_big,
-        stitch_background_image_8x8,
+        stitch_background_image_8x8_premultiplied_alpha,
     };
 
     // NOTE: We can uncomment this if we want to test with more colors than we have symbols
@@ -1418,7 +1518,8 @@ fn main() {
             &image_filepath,
             &symbols,
             &symbols_alphanum,
-            &stitch_images,
+            &stitch_images_premultiplied_alpha,
+            &stitch_images_luminance_premultiplied_alpha,
         );
 
         rayon::scope(|scope| {
@@ -1487,7 +1588,8 @@ fn test_symbols_contrast() {
         symbols = [&symbols[..], &symbols[..]].concat()
     }
 
-    let color_mappings = create_color_mappings_from_image(&image, "", &symbols, &vec![], &vec![]);
+    let color_mappings =
+        create_color_mappings_from_image(&image, "", &symbols, &vec![], &vec![], &vec![]);
 
     create_cross_stitch_pattern(
         &image,
