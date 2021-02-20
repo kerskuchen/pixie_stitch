@@ -4,6 +4,7 @@ members = [
     "cottontail",
     "cottontail/ct_assetbaker",
     "cottontail/ct_makeproject",
+    "cottontail/ct_executable_packager",
 ]
 
 # NOTE: The following optimizes dependencies (but not workspace members) 

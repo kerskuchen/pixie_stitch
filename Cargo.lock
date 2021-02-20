@@ -288,8 +288,19 @@ dependencies = [
  "ct_lib_game",
  "ct_lib_image",
  "ct_lib_math",
- "ico",
  "rayon",
+ "serde",
+]
+
+[[package]]
+name = "ct_executable_packager"
+version = "0.1.0"
+dependencies = [
+ "ct_lib_core",
+ "ct_lib_image",
+ "ct_lib_math",
+ "ico",
+ "mustache",
  "serde",
 ]
 
