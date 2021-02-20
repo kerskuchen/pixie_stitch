@@ -14,13 +14,14 @@ We then can start drag-and-dropping our pixel-art images onto the `pixie_stitch.
 Doing that will create a new folder which contains our cross-stitch-patterns and is named like 
 our image.
 
+![Example conversion output](examples/pixie_preview/pixie_complete.png "Example conversion output")
 ![Example conversion output](example.png "Example conversion output")
 
-Additional example output can be found in the `examples` directory.
+Additional example output including centered and "realistic" preview can be found in the `examples` directory.
 
 # Limitations
 
-As of now Pixie Stitch supports `.png` and `.gif` images with up to 17 colors. The number of colors
+As of now Pixie Stitch supports `.png` and `.gif` images with up to 20 colors. The number of colors
 can be increased by adding additional black-and-white `16x16`-pixels-sized symbol images in the 
 `resources` folder where our executable is located.
 
