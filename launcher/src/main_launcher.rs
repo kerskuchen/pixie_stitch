@@ -1472,7 +1472,7 @@ fn set_panic_hook() {
         let (message, location) = panic_message_split_to_message_and_location(panic_info);
         let final_message = format!("{}\n\nError occured at: {}", message, location);
 
-        show_messagebox("Pixel Stitch Error", &final_message, true);
+        show_messagebox("Pixie Stitch Error", &final_message, true);
 
         // NOTE: This forces the other threads to shutdown as well
         std::process::abort();
@@ -1540,7 +1540,7 @@ fn main() {
     }
 
     #[cfg(not(debug_assertions))]
-    show_messagebox("Pixel Stitch", "Finished creating patterns. Enjoy!", false);
+    show_messagebox("Pixie Stitch", "Finished creating patterns. Enjoy!", false);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

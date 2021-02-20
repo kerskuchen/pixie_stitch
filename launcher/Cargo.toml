@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "3.0.0"
+version = "3.0.1"
 authors = ["Jakob Schwab <j.schwab@mail.de>"]
 edition = "2018"
 default-run = "launcher"
