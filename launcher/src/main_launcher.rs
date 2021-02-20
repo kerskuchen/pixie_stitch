@@ -1126,7 +1126,8 @@ fn create_cross_stitch_pattern_preview(
         .height
         / 8;
 
-    let mut scaled_bitmap = Bitmap::new(
+    // Background only
+    let mut background_layer = Bitmap::new(
         (tile_width * bitmap.width) as u32,
         (tile_height * bitmap.height) as u32,
     );
@@ -1144,9 +1145,21 @@ fn create_cross_stitch_pattern_preview(
             );
             resources
                 .stitch_background_image_8x8_premultiplied_alpha
-                .blit_to(&mut scaled_bitmap, pos, true);
+                .blit_to(&mut background_layer, pos, true);
         }
     }
+    // Write out png image
+    let output_filepath = get_image_output_filepath(&image_filepath, output_dir_suffix)
+        + "_"
+        + output_filename_suffix
+        + "_background.png";
+    Bitmap::write_to_png_file(&background_layer, &output_filepath);
+
+    // Stitches only
+    let mut colored_stitches_layer = Bitmap::new(
+        (tile_width * bitmap.width) as u32,
+        (tile_height * bitmap.height) as u32,
+    );
 
     let mut random = Random::new_from_seed(1234);
     for y in 0..bitmap.height {
@@ -1163,7 +1176,7 @@ fn create_cross_stitch_pattern_preview(
                     &stitches[random.u32_bounded_exclusive(stitches_count as u32) as usize];
                 let stitch_center = Vec2i::new(stitch.width / 2, stitch.height / 2);
                 stitch.blit_to_alpha_blended_premultiplied(
-                    &mut scaled_bitmap,
+                    &mut colored_stitches_layer,
                     tile_pos_center - stitch_center,
                     true,
                     ColorBlendMode::Normal,
@@ -1171,13 +1184,30 @@ fn create_cross_stitch_pattern_preview(
             }
         }
     }
+    // Write out png image
+    let output_filepath = get_image_output_filepath(&image_filepath, output_dir_suffix)
+        + "_"
+        + output_filename_suffix
+        + "_stitches.png";
+    Bitmap::write_to_png_file(
+        &colored_stitches_layer.to_unpremultiplied_alpha(),
+        &output_filepath,
+    );
 
+    // Combined
+    let mut combined = background_layer;
+    colored_stitches_layer.blit_to_alpha_blended_premultiplied(
+        &mut combined,
+        Vec2i::zero(),
+        false,
+        ColorBlendMode::Normal,
+    );
     // Write out png image
     let output_filepath = get_image_output_filepath(&image_filepath, output_dir_suffix)
         + "_"
         + output_filename_suffix
         + ".png";
-    Bitmap::write_to_png_file(&scaled_bitmap, &output_filepath);
+    Bitmap::write_to_png_file(&combined, &output_filepath);
 }
 
 fn create_preview_dir(
