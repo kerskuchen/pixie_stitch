@@ -48,18 +48,20 @@ Assuming we have [Git](https://git-scm.com/) installed first we need to clone an
 repository via:
 
 ```
-git clone https://github.com/kerskuchen/pixie_stitch.git
-cd pixie_stitch
-git submodule update --init --remote
+git clone https://github.com/kerskuchen/pixie_stitch.git --recursive
 ```
 
-Assuming we have [Rust](https://www.rust-lang.org/) installed and can run `cargo` commands we can
-build a release version by just running `windows_build_shipping.bat`. This creates a new folder 
-named `windows_shipping` which contains the final executable ready to run with all needed
-resources.
+Assuming we have [Rust](https://www.rust-lang.org/) installed and can run `cargo` commands we can 
+build a release version by just running 
+
+```
+cargo run --package ct_executable_packager
+```
+This creates a new folder named `windows_shipping` which contains the final executable ready to run 
+with all needed resources.
 
 If we have the [Resource Hacker](http://angusj.com/resourcehacker/) tool in our `%PATH` the 
-`windows_build_shipping.bat` script will also set a launcher icon and version information for our 
+above command script will also set a launcher icon and version information for our 
 executable.
 
 # Development
@@ -77,6 +79,3 @@ git checkout master
 
 That will make sure that we don't accidentally commit something to `cottontail` in the 
 detached `HEAD` state.
-
-To update `cottontail` to its latest version on master we can run the `git_update_cottontail.bat` 
-script.
