@@ -1,9 +1,9 @@
 #![windows_subsystem = "windows"]
 
+use cottontail::core::*;
 use cottontail::image::{bitmap::*, color::hsl, font::*};
 use cottontail::math::*;
 use cottontail::{core::PathHelper, image::ColorBlendMode};
-use cottontail::{core::*, draw::screen_point_to_canvas_point};
 
 use gif::SetParameter;
 use indexmap::IndexMap;
@@ -107,13 +107,12 @@ fn get_image_output_filepath(image_filepath: &str, output_dir_suffix: &str) -> S
 // NOTE: THIS IS FOR INTERNAL TESTING
 #[cfg(debug_assertions)]
 fn get_image_filepaths_from_commandline() -> Vec<String> {
-    // vec!["examples/nathan.png".to_owned()]
-    // vec!["examples/nathan_big.gif".to_owned()]
-    // vec!["examples/pixie.png".to_owned()]
     vec![
         "examples/nathan.png".to_owned(),
         "examples/nathan_big.gif".to_owned(),
         "examples/pixie.png".to_owned(),
+        // "nachtlicht-pixel2.gif".to_owned(),
+        // "nachtlicht-pixel2wolke.png".to_owned(),
     ]
 }
 
@@ -882,9 +881,6 @@ fn create_color_mappings_from_image(
                     .zip(stitch_images_luminance_premultiplied_alpha.iter())
             {
                 let mut stitch = stitch_image_premultipllied.clone();
-                // stitch
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/begin.png");
 
                 let screen_layer = Bitmap::new_filled(
                     stitch_image_premultipllied.width as u32,
@@ -892,18 +888,12 @@ fn create_color_mappings_from_image(
                     PixelRGBA::new(105, 109, 128, 255),
                 )
                 .to_premultiplied_alpha();
-                // screen_layer
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/screen.png");
                 screen_layer.blit_to_alpha_blended_premultiplied(
                     &mut stitch,
                     Vec2i::zero(),
                     false,
                     ColorBlendMode::Screen,
                 );
-                // stitch
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/stitch_after_screen.png");
 
                 let color_layer = Bitmap::new_filled(
                     stitch_image_premultipllied.width as u32,
@@ -911,44 +901,28 @@ fn create_color_mappings_from_image(
                     color,
                 )
                 .to_premultiplied_alpha();
-                // color_layer
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/color.png");
                 color_layer.blit_to_alpha_blended_premultiplied(
                     &mut stitch,
                     Vec2i::zero(),
                     false,
                     ColorBlendMode::Multiply,
                 );
-                // stitch
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/stitch_after_color.png");
 
                 let mut luminosity_layer = stitch_image_luminance_premultiplied.clone();
                 let percent = (color.r as f32 + color.g as f32 + color.b as f32) / (3.0 * 255.0);
                 for pixel in luminosity_layer.data.iter_mut() {
-                    pixel.r /= 3 + (4.0 * percent * percent) as u8;
-                    pixel.g /= 3 + (4.0 * percent * percent) as u8;
-                    pixel.b /= 3 + (4.0 * percent * percent) as u8;
-                    pixel.a /= 3 + (4.0 * percent * percent) as u8;
+                    pixel.r /= 6 + (8.0 * percent * percent) as u8;
+                    pixel.g /= 6 + (8.0 * percent * percent) as u8;
+                    pixel.b /= 6 + (8.0 * percent * percent) as u8;
+                    pixel.a /= 6 + (8.0 * percent * percent) as u8;
                 }
-                // luminosity_layer
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/luminosity.png");
                 luminosity_layer.blit_to_alpha_blended_premultiplied(
                     &mut stitch,
                     Vec2i::zero(),
                     false,
                     ColorBlendMode::Luminosity,
                 );
-                // stitch
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/stitch_after_luminosity.png");
 
-                stitch = stitch.masked_by_premultiplied_alpha(&stitch_image_premultipllied);
-                // stitch
-                //     .to_unpremultiplied_alpha()
-                //     .write_to_png_file("text/end.png");
                 entry
                     .stitches_premultiplied
                     .push(stitch.masked_by_premultiplied_alpha(&stitch_image_premultipllied));
