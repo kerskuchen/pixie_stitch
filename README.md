@@ -4,6 +4,8 @@
 A [cross-stitch](https://en.wikipedia.org/wiki/Cross-stitch) (and fusible-beads) pattern generator for Windows that is specialized for pixel art
 and ease of use via drag-and-dropping of images. 
 
+![Example conversion output](examples/pixie_preview/pixie_complete.png "Example conversion output")
+
 # Usage
 
 The easiest way to use Pixie Stitch is to download the latest release from the 
@@ -14,7 +16,6 @@ We then can start drag-and-dropping our pixel-art images onto the `pixie_stitch.
 Doing that will create a new folder which contains our cross-stitch-patterns and is named like 
 our image.
 
-![Example conversion output](examples/pixie_preview/pixie_complete.png "Example conversion output")
 ![Example conversion output](example.png "Example conversion output")
 
 Additional example output including centered and "realistic" preview can be found in the `examples` directory.
