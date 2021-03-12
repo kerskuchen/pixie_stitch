@@ -1,5 +1,5 @@
 # Pixie Stitch
-![Pixie Stitch Logo](assets_executable/launcher_icon/64.png "Pixie Stitch Logo") 
+![Pixie Stitch Logo](assets_executable/launcher_icon_64.png "Pixie Stitch Logo") 
 
 A [cross-stitch](https://en.wikipedia.org/wiki/Cross-stitch) (and fusible-beads) pattern generator for Windows that is specialized for pixel art
 and ease of use via drag-and-dropping of images. 
